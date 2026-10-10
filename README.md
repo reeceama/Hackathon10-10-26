@@ -302,5 +302,5 @@ https://doi.org/10.18653/v1/2021.acl-demo.15
 - [sedmoh](https://github.com/sedmoh): the browser extension, and the backend's page
   extraction, embeddings, storage, search and API.
 - [reeceama](https://github.com/reeceama): claim verification, evaluation and calibration,
-  misquote and copying detection, the learning model, and the Word add-in. Also contributed to
-  the browser extension's design, including its privacy features and research mode.
+  misquote and copying detection, the learning model, the Word add-in, and the browser
+  extension's privacy features.
