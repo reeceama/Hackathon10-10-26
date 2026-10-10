@@ -1,3 +1,4 @@
+import re
 from typing import Literal, Optional
 
 import anthropic
@@ -9,6 +10,7 @@ client = anthropic.Anthropic()
 
 MODEL = "claude-haiku-5-5"
 THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.95, recall 0.77
+TOO_CLOSE = 0.5  # share of the sentence's unquoted word trigrams copied from the source
 
 SYSTEM_PROMPT = """You check whether a sentence from a student's essay is backed by sources they have read.
 
@@ -45,11 +47,68 @@ def call_llm(system, user):
     return response.parsed_output
 
 
+QUOTED = re.compile(r'"([^"]+)"|“([^”]+)”')
+GAPS = re.compile(r"\.\.\.|…|\[[^\]]*\]")  # ellipses and [editorial insertions]
+
+
+def normalise(text):
+    """Lower case, straight quotes and apostrophes, single spaces, no edge punctuation."""
+    text = text.lower().translate(str.maketrans("‘’“”", "''\"\""))
+    return " ".join(text.split()).strip(" .,;:!?")
+
+
+def split_quotes(sentence):
+    """Return (quoted strings, the sentence with them removed)."""
+    quotes = [a or b for a, b in QUOTED.findall(sentence)]
+    return quotes, QUOTED.sub(" ", sentence)
+
+
+def quote_in_source(quote, source):
+    """True if a quotation appears word for word in the source.
+
+    Ellipses and [square-bracketed] insertions mark gaps: each piece between
+    them must appear in the source, in order.
+    """
+    source = normalise(source)
+    position = 0
+    for piece in GAPS.split(quote):
+        piece = normalise(piece)
+        if not piece:
+            continue
+        found = source.find(piece, position)
+        if found == -1:
+            return False
+        position = found + len(piece)
+    return True
+
+
+def trigrams(text):
+    words = re.findall(r"[a-z0-9']+", normalise(text))
+    return {tuple(words[i:i + 3]) for i in range(len(words) - 2)}
+
+
+def copied_share(text, source):
+    """Share of the text's word trigrams that also appear in the source (0 to 1)."""
+    own = trigrams(text)
+    if not own:
+        return 0.0
+    return len(own & trigrams(source)) / len(own)
+
+
+def check_wording(sentence, source):
+    """Quotes must match the source exactly; everything else must not copy it too closely."""
+    quotes, unquoted = split_quotes(sentence)
+    return {
+        "misquote": any(not quote_in_source(q, source) for q in quotes),
+        "too_close": copied_share(unquoted, source) >= TOO_CLOSE,
+    }
+
+
 def verify(sentence, candidates):
     """Check a sentence against candidate passages.
 
     candidates: the top matches from store.search - [{"text", "source", "score"}, ...].
-    Returns {"source", "passage", "quote", "confidence", "label", "score"} or None.
+    Returns {"source", "passage", "quote", "confidence", "label", "score", "misquote", "too_close"} or None.
     """
     if not candidates:
         return None
@@ -84,10 +143,33 @@ def verify(sentence, candidates):
         "confidence": confidence,
         "label": label,
         "score": chosen.get("score"),
+        # Checked against all candidates: a quotation may come from a neighbouring passage.
+        **check_wording(sentence, " ".join(c["text"] for c in candidates)),
     }
 
 
 if __name__ == "__main__":
+    source = (
+        "A 10-year cohort study found that adults who exercised three times a week "
+        "had a 30% lower incidence of cardiovascular disease than those who did not."
+    )
+    wording_tests = [
+        # (sentence, expected misquote, expected too_close)
+        ('One study found "a 30% lower incidence of cardiovascular disease" among regular exercisers.', False, False),
+        ("One study found “a 30% lower incidence of cardiovascular disease” among regular exercisers.", False, False),
+        ('Adults who exercised "three times a week had a 40% lower incidence" of heart disease.', True, False),
+        ('Regular exercisers "had a 30% lower incidence of [heart] disease than those who did not."', False, False),
+        ('The study "found that adults ... had a 30% lower incidence" of disease.', False, False),
+        ("Adults who exercised three times a week had a 30% lower incidence of cardiovascular disease.", False, True),
+        ("People who work out regularly are noticeably less likely to develop heart problems.", False, False),
+    ]
+    print("Wording checks:")
+    for sentence, misquote, too_close in wording_tests:
+        got = check_wording(sentence, source)
+        ok = got == {"misquote": misquote, "too_close": too_close}
+        print(f"{'✓' if ok else '✗'} {got} | {sentence}")
+
+    print("\nVerifier:")
     tests = [
         # (sentence, passage, expected label)
         (
