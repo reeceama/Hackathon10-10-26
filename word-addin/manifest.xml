@@ -5,7 +5,7 @@
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>9df83cbc-6221-4ebb-a6f2-c73ccee1aff8</Id>
-  <Version>1.0.0.3</Version>
+  <Version>0.1.0.0</Version>
   <ProviderName>Hackathon team</ProviderName>
   <DefaultLocale>en-GB</DefaultLocale>
   <DisplayName DefaultValue="Referee"/>

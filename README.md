@@ -1,6 +1,6 @@
 # Referee
 
-**Keeps your essay honest, without playing for you.**
+**Keeps your essay honest, without playing for you.** · Version 0.1.0
 
 Referee quietly remembers the articles you read while researching. As you write, it checks
 each sentence against that reading and tells you when a claim is supported, when your source
@@ -165,8 +165,15 @@ as you type, APA 7 / Harvard citations using Word's own citation and bibliograph
 colour-coded markers that work in dark mode. **It is not yet working reliably** and isn't part
 of the demo.
 
+## Versions
+| Version | What it is |
+|---|---|
+| **0.1.0** (current) | Hackathon build: backend, claim verification, evaluation, browser extension. Word add-in in progress. |
+| **0.2.0** | The full Word integration: checking as you write, citations and bibliography through Word's own referencing tools. |
+| **1.0.0** | The official release: cleaned up and documented, ready for wider use and research. Close to 0.2.0 in features. |
+
 ## What's next
-- Finish the Word add-in, then Google Docs.
+- Finish the Word add-in (0.2.0), then Google Docs.
 - Capture PDFs (many academic papers are read as PDFs).
 - Reading that expires automatically after a set number of days.
 - A provenance log: proof of your own research process, useful when AI-writing detectors get it wrong.
