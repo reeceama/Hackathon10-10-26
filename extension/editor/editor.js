@@ -38,15 +38,26 @@ function finishedSentences(text) {
     .filter((s) => s.split(/\s+/).length >= MIN_WORDS);
 }
 
+// Checking is separate from research mode: research mode controls what is captured,
+// but anything already captured can be checked against at any time. A sentence is only
+// sent to Claude when the local search finds a closely matching passage.
+let retryTimer;
+
 async function checkNewSentences() {
-  const { research } = await researchState();
-  if (!research) return; // research mode off: nothing is checked
   for (const sentence of finishedSentences(editor.value)) {
     if (checks.has(sentence)) continue;
     checks.set(sentence, { state: "pending" });
     api("check", { sentence })
-      .then((result) => checks.set(sentence, { state: "done", match: result?.match ? result : null }))
-      .catch(() => checks.set(sentence, { state: "done", match: null }))
+      .then((result) => {
+        if (!result || result.error) throw new Error(result?.error || "No reply from the server");
+        checks.set(sentence, { state: "done", match: result.match ? result : null });
+      })
+      .catch(() => {
+        // Server unreachable: forget this attempt so the sentence is checked again shortly.
+        checks.delete(sentence);
+        clearTimeout(retryTimer);
+        retryTimer = setTimeout(checkNewSentences, 5000);
+      })
       .finally(render);
   }
   render();
@@ -208,7 +219,6 @@ async function setResearch(on) {
 
 async function showResearch() {
   const state = await researchState();
-  if (state.research) checkNewSentences(); // catch up on anything written while it was off
   banner.classList.toggle("off", !state.research);
   const topic = title.value.trim() || "your essay";
   bannerText.textContent = state.research ? `Researching for: ${topic}` : "Research mode is off";
@@ -225,7 +235,7 @@ if (IN_EXTENSION) chrome.storage.onChanged.addListener(showResearch);
 (async () => {
   loadDraft();
   const state = await researchState();
-  if (IN_EXTENSION && !state.research && (state.mode ?? "auto") === "auto") await setResearch(true);
+  if (IN_EXTENSION && !state.research && (state.mode ?? "manual") === "auto") await setResearch(true);
   showResearch();
   render();
   checkNewSentences();
