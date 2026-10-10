@@ -182,7 +182,7 @@ of the demo.
 ---
 
 ## Team
-- **sedmoh:** browser extension (research mode, page capture, editor), and the backend's
+- **[sedmoh](https://github.com/sedmoh):** browser extension (research mode, page capture, editor), and the backend's
   page extraction, embeddings, storage, search and API.
-- **Reece Mings-Alleyne:** claim verification, evaluation and calibration, misquote and
+- **[reeceama](https://github.com/reeceama):** claim verification, evaluation and calibration, misquote and
   copying detection, the learning model, and the Word add-in (in development).
