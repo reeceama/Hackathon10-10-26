@@ -16,8 +16,10 @@ const COMMENT_PREFIX = "Referee: "; // marks Referee's own comments, so it can r
 const MIN_WORDS = 5; // the backend ignores shorter sentences anyway
 const CHECKED = "referee-checked"; // document setting: sentences already checked, saved in the .docx
 // One or more APA in-text citations at the end of a sentence, e.g. " (Smith, 2023)".
-const ADDED_CITATION = /(?:\s*\([^()]*,\s*(?:\d{4}|n\.d\.|no date)\))+(?=[.!?]["”’)]*$)/;
-const STYLE_SETTING = "referee-style"; // document setting: "apa" or "harvard"
+const ADDED_CITATION = /(?:\s*\([^()]*,\s*(?:\d{4}|n\.d\.|no date)\)|\s*\[\d+\])+(?=[.!?]["”’)]*$)/;
+const STYLE_SETTING = "referee-style"; // document setting: "apa", "harvard" or "ieee"
+const NUMBERS_SETTING = "referee-numbers"; // document setting: source URL -> IEEE number, in order of first citation
+const PROJECT_SETTING = "referee-project"; // document setting: only check against this project's reading
 const AUTO_SETTING = "referee-auto"; // document setting: check as the person writes
 const PAUSE_MS = 2500; // automatic checks wait for a pause in writing
 const LIST_HEADINGS = ["References", "Reference list"];
@@ -29,6 +31,7 @@ const clearButton = document.getElementById("clear");
 const darkToggle = document.getElementById("dark");
 const styleSelect = document.getElementById("style");
 const autoToggle = document.getElementById("auto");
+const projectInput = document.getElementById("project");
 const statusBox = document.getElementById("status");
 const resultsList = document.getElementById("results");
 
@@ -50,6 +53,11 @@ Office.onReady(() => {
         await updateWordFields(context);
       }).catch(() => {});
     }
+  };
+  projectInput.value = Office.context.document.settings.get(PROJECT_SETTING) || "";
+  projectInput.onchange = () => {
+    Office.context.document.settings.set(PROJECT_SETTING, projectInput.value.trim());
+    Office.context.document.settings.saveAsync();
   };
   setBusy(false);
 
@@ -336,6 +344,43 @@ const STYLES = {
   },
 };
 
+// IEEE numbers sources in the order they are first cited, and keeps the number for the
+// rest of the document.
+function sourceNumber(source) {
+  const settings = Office.context.document.settings;
+  const numbers = settings.get(NUMBERS_SETTING) || {};
+  const key = source.url || source.title || "";
+  if (!numbers[key]) {
+    numbers[key] = Object.keys(numbers).length + 1;
+    settings.set(NUMBERS_SETTING, numbers);
+    settings.saveAsync();
+  }
+  return numbers[key];
+}
+
+STYLES.ieee = {
+  name: "IEEE",
+  heading: "References",
+  headingAlignment: "Left",
+  hangingIndent: false,
+  numbered: true,
+  inText(source) {
+    return `[${sourceNumber(source)}]`;
+  },
+  // Webpages: [n] A. Author, "Title," Site. Accessed: Mon. Day, Year. [Online]. Available: URL
+  reference(source) {
+    const name = author(source);
+    const who = isPerson(name) ? name.split(/\s+/).map((w, i, all) => i < all.length - 1 ? `${w[0]}.` : w).join(" ") : name;
+    const a = parts(accessed(source));
+    const site = cleanSite(source.site) || hostname(source.url);
+    const month = a.month ? `${a.month.slice(0, 3)}${a.month.length > 4 ? "." : ""} ` : "";
+    return {
+      text: `[${sourceNumber(source)}] ${who}, "${cleanTitle(source.title)}," ${site}. Accessed: ${month}${a.day}, ${a.year}. [Online]. Available: ${source.url}`,
+      italic: site,
+    };
+  },
+};
+
 // A stable, hidden bookmark name for a reference entry, so citations can link to it.
 // Word bookmark names: start with a letter (or _ for hidden), letters/digits/_ only, max 40 chars.
 function bookmarkName(referenceText) {
@@ -353,6 +398,7 @@ const BIBLIOGRAPHY_NS = "http://schemas.openxmlformats.org/officeDocument/2006/b
 const WORD_STYLES = {
   apa: { file: "\\APASixthEditionOfficeOnline.xsl", name: "APA" },
   harvard: { file: "\\HarvardAnglia2008OfficeOnline.xsl", name: "Harvard - Anglia" },
+  ieee: { file: "\\IEEE2006OfficeOnline.xsl", name: "IEEE" },
 };
 const BIBLIOGRAPHY_SETTING = "referee-word-bibliography"; // document setting: Word bibliography inserted
 let useWordTools = true; // switched off for this session if Word rejects its citation parts
@@ -576,7 +622,7 @@ async function check(scope, force, automatic = false) {
       let done = 0;
       setStatus(`Checking ${sentences.length} new sentence${sentences.length === 1 ? "" : "s"}…`);
       const matches = await mapLimit(sentences, PARALLEL, async ({ sentence }) => {
-        const result = await post("check", { sentence: sentenceKey(sentence) });
+        const result = await post("check", { sentence: sentenceKey(sentence), project: projectInput.value.trim() });
         if (!automatic) setStatus(`Checking ${++done} of ${sentences.length} sentences…`);
         return result;
       });
@@ -689,7 +735,7 @@ async function check(scope, force, automatic = false) {
       if (!useWordTools) added = await addReferenceList(context, body, paragraphs, references);
       setStatus(
         `Checked ${sentences.length} sentence${sentences.length === 1 ? "" : "s"}: ` +
-          `${citations} APA citation${citations === 1 ? "" : "s"}, ` +
+          `${citations} ${currentStyle().name} citation${citations === 1 ? "" : "s"}, ` +
           `${added} new reference${added === 1 ? "" : "s"}, ${warnings} comment${warnings === 1 ? "" : "s"}.` +
           (failed ? ` ${failed} sentence${failed === 1 ? "" : "s"} couldn't be marked.` : "")
       );
@@ -708,7 +754,7 @@ async function check(scope, force, automatic = false) {
 async function addReferenceList(context, body, paragraphs, references) {
   const style = currentStyle();
   const existing = new Set(paragraphs.items.map((p) => (p.text || "").trim()));
-  const entries = [...references].filter(([text]) => !existing.has(text)).sort(([a], [b]) => a.localeCompare(b));
+  const entries = [...references].filter(([text]) => !existing.has(text)).sort(([a], [b]) => style.numbered ? parseInt(a.slice(1), 10) - parseInt(b.slice(1), 10) : a.localeCompare(b));
   if (entries.length === 0) return 0;
 
   if (!LIST_HEADINGS.some((heading) => existing.has(heading))) {

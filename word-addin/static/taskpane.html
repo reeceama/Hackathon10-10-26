@@ -39,7 +39,10 @@
       <button id="clear" class="link" disabled>Clear Referee marks</button>
     </div>
     <label class="toggle">Referencing style
-      <select id="style"><option value="apa">APA 7</option><option value="harvard">Harvard</option></select>
+      <select id="style"><option value="apa">APA 7</option><option value="harvard">Harvard</option><option value="ieee">IEEE (numbered)</option></select>
+    </label>
+    <label class="toggle">Project
+      <input id="project" placeholder="All reading" />
     </label>
     <label class="toggle"><input type="checkbox" id="dark" /> Dark mode colours</label>
     <div class="key">
@@ -49,6 +52,6 @@
     </div>
     <div id="status">Loading…</div>
     <ul id="results"></ul>
-    <script src="taskpane.js?v=13"></script>
+    <script src="taskpane.js?v=14"></script>
   </body>
 </html>
