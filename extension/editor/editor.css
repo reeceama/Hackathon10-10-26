@@ -120,6 +120,8 @@ mark {
 mark.pending { background: none; border-bottom: 2px dotted #c4c8cf; }
 mark.supports { background: none; border-bottom: 2px solid var(--supports); }
 mark.contradicts { background: var(--contradicts-bg); border-bottom: 2px solid var(--contradicts); }
+mark.needs { background: none; border-bottom: 2px dashed var(--muted); }
+mark.active.needs { background: rgba(107, 114, 128, 0.15); }
 mark.misquote, mark.warn { background: var(--warn-bg); border-bottom: 2px solid var(--warn); }
 mark.active.supports { background: var(--supports-bg); }
 mark.active.contradicts { background: rgba(192, 57, 43, 0.25); }
@@ -151,6 +153,16 @@ aside h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; c
 .card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
 .card.contradicts { border-left-color: var(--contradicts); }
 .card.misquote { border-left-color: var(--warn); }
+.card.needs { border-left-color: var(--muted); }
+.card.needs .label { color: var(--muted); }
+.card .hint { margin: 4px 0 0; }
+
+.evidence-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; background: var(--line); }
+.evidence-bar .supported { background: var(--supports); }
+.evidence-bar .wording { background: var(--warn); }
+.evidence-bar .contradicted { background: var(--contradicts); }
+.evidence-bar .needs { background: var(--muted); opacity: 0.5; }
+.evidence-text strong { color: var(--text); }
 
 .card .label { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--supports); }
 .card.contradicts .label { color: var(--contradicts); }
@@ -184,6 +196,8 @@ aside h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; c
   color: var(--brand); text-decoration: underline; font: inherit;
 }
 
+.proof { margin-top: 10px; text-align: right; }
+.proof .copy { border: 1px solid var(--line); background: var(--page); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
 .refs { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
 .refs-head { display: flex; justify-content: space-between; align-items: center; }
 .refs h2 { font: 600 16px Georgia, serif; margin: 0; }

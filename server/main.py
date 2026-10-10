@@ -14,6 +14,7 @@ from extract import extract_page
 from pdf import extract_pdf
 from store import add_page, clear, search
 from verify import verify
+from claims import needs_source
 from feedback import FeedbackModel
  
 # Minimum similarity score before a passage is sent to Claude at all.
@@ -142,14 +143,17 @@ def check(req: CheckRequest):
     if len(sentence.split()) < 5:          # too short to carry a real claim
         return {"match": False}
  
+    # No supporting reading: say whether the sentence reads like a claim that needs one.
+    unsupported = {"match": False, "needs_source": needs_source(sentence)}
+
     results = search(sentence, k=5)  # 3 missed the best passage in testing
     candidates = [r for r in results if r["score"] >= MIN_SCORE]
     if not candidates:
-        return {"match": False}
+        return unsupported
  
     verdict = verify(sentence, candidates)
     if verdict is None:
-        return {"match": False}
+        return unsupported
     if not feedback.should_show(verdict):  # this person keeps rejecting markers like this
         return {"match": False}
     # verdict includes "label": "supports" or "contradicts" - the editor must handle both

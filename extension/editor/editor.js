@@ -72,7 +72,11 @@ async function checkNewSentences() {
     api("check", { sentence })
       .then((result) => {
         if (!result || result.error) throw new Error(result?.error || "No reply from the server");
-        checks.set(sentence, { state: "done", match: result.match ? result : null });
+        checks.set(sentence, {
+          state: "done",
+          match: result.match ? result : null,
+          needsSource: !result.match && Boolean(result.needs_source),
+        });
       })
       .catch(() => {
         // Server unreachable: forget this attempt so the sentence is checked again shortly.
@@ -102,6 +106,7 @@ function escapeHtml(text) {
 
 function markClass(entry) {
   if (entry.state === "pending") return "pending";
+  if (!entry.match) return "needs";
   const { label, misquote, too_close } = entry.match;
   return label === "supports" && (misquote || too_close) ? "supports warn" : label;
 }
@@ -112,7 +117,7 @@ function highlights() {
   const found = [];
   for (const [sentence, entry] of checks) {
     if (dismissed.has(sentence)) continue;
-    if (entry.state === "done" && !entry.match) continue;
+    if (entry.state === "done" && !entry.match && !entry.needsSource) continue;
     const start = text.indexOf(sentence);
     if (start !== -1) found.push({ sentence, entry, start, end: start + sentence.length });
   }
@@ -134,10 +139,11 @@ function render() {
   backdrop.innerHTML = html + escapeHtml(text.slice(position)) + "\n";
   growEditor();
 
-  const matched = items.filter((item) => item.entry.state === "done");
+  const matched = items.filter((item) => item.entry.state === "done" && item.entry.match);
+  const unsourced = items.filter((item) => item.entry.state === "done" && item.entry.needsSource);
   const numbers = sourceNumbers(matched);
-  renderCards(matched, items, numbers);
-  renderSummary(matched);
+  renderCards(items.filter((item) => item.entry.state === "done"), items, numbers);
+  renderSummary(matched, unsourced);
   renderReferences(matched, numbers);
 }
 
@@ -195,6 +201,10 @@ function renderCards(matched, items, numbers) {
     const { sentence, entry } = item;
     const match = entry.match;
     const index = items.indexOf(item);
+    if (!match) {
+      cardsBox.appendChild(needsSourceCard(sentence, index));
+      continue;
+    }
     const source = match.source || {};
     const year = (source.date ? ` · ${String(source.date).slice(0, 4)}` : "") + (match.page ? ` · p. ${match.page}` : "");
 
@@ -232,12 +242,50 @@ function renderCards(matched, items, numbers) {
   }
 }
 
-function renderSummary(matched) {
-  const count = (label) => matched.filter((item) => item.entry.match.label === label).length;
-  const warnings = matched.filter((item) => item.entry.match.misquote || item.entry.match.too_close).length;
+// A claim nothing in the reading supports: a prompt to find a source, not a judgement.
+function needsSourceCard(sentence, index) {
+  const card = document.createElement("div");
+  card.className = "card needs";
+  card.innerHTML = `
+    <button class="dismiss" title="Doesn't need a source">×</button>
+    <div class="label">Needs a source</div>
+    <div class="sentence">${escapeHtml(sentence.length > 90 ? sentence.slice(0, 90) + "…" : sentence)}</div>
+    <div class="hint">This reads like a factual claim, but nothing you've read supports it yet.</div>
+  `;
+  card.querySelector(".dismiss").addEventListener("click", () => {
+    dismissed.add(sentence);
+    render();
+  });
+  const mark = () => backdrop.querySelector(`mark[data-index="${index}"]`);
+  card.addEventListener("mouseenter", () => mark()?.classList.add("active"));
+  card.addEventListener("mouseleave", () => mark()?.classList.remove("active"));
+  return card;
+}
+
+// Evidence map: how well the claims in the piece are backed by the reading, at a glance.
+function renderSummary(matched, unsourced) {
+  const count = (test) => matched.filter((item) => test(item.entry.match)).length;
+  const supported = count((m) => m.label === "supports" && !m.misquote && !m.too_close);
+  const wording = count((m) => m.misquote || m.too_close);
+  const contradicted = count((m) => m.label === "contradicts" && !m.misquote);
+  const needs = unsourced.length;
+  const claims = supported + wording + contradicted + needs;
   const pending = [...checks.values()].filter((entry) => entry.state === "pending").length;
-  const parts = [`${count("supports")} supported`, `${count("contradicts")} contradicted`, `${warnings} wording warning${warnings === 1 ? "" : "s"}`];
-  summary.textContent = parts.join(" · ") + (pending ? ` · checking ${pending}…` : "");
+
+  const segments = [
+    ["supported", supported, "backed by your reading"],
+    ["wording", wording, "need their wording checked"],
+    ["contradicted", contradicted, "contradicted by a source"],
+    ["needs", needs, "need a source"],
+  ].filter(([, n]) => n);
+  const backed = claims ? Math.round((100 * (supported + wording)) / claims) : 0;
+
+  summary.innerHTML = claims ? `
+    <div class="evidence-bar">${segments.map(([kind, n]) =>
+      `<span class="${kind}" style="flex:${n}" title="${n} ${kind}"></span>`).join("")}</div>
+    <div class="evidence-text"><strong>${backed}% of your claims are backed by your reading.</strong>
+      ${segments.map(([, n, words]) => `${n} ${words}`).join(" · ")}${pending ? ` · checking ${pending}…` : ""}</div>
+  ` : (pending ? `Checking ${pending}…` : "");
 }
 
 editor.addEventListener("input", () => {
@@ -339,6 +387,57 @@ async function showServer() {
   serverStatus.dataset.state = online ? "online" : "offline";
   serverStatus.textContent = online ? "" : "Server not running. Start it with: uvicorn main:app";
 }
+
+// --- Proof of work: what was read, when, and which claims each source backs. ---
+// Built from records kept on this computer, so it shows the research process; it isn't
+// tamper-proof, and the report says so.
+
+const when = (time) => new Date(time).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+
+async function proofOfWork() {
+  const { captures = [] } = IN_EXTENSION ? await chrome.storage.local.get("captures") : { captures: [] };
+  const read = captures.filter((c) => c.status === "saved" || c.status === "already").sort((a, b) => a.at - b.at);
+  const readAt = new Map(read.map((c) => [c.url, c.at]));
+  const items = highlights().filter((item) => item.entry.state === "done" && item.entry.match?.label === "supports");
+  const numbers = sourceNumbers(items);
+  const summaryText = summary.querySelector(".evidence-text")?.innerText || "";
+  const docTitle = title.value.trim() || "Untitled";
+
+  const readingRows = read.map((c) => `<tr><td>${escapeHtml(when(c.at))}</td><td>${escapeHtml(c.title || c.url)}<br>
+    <span class="url">${escapeHtml(c.url)}</span></td></tr>`).join("");
+  const claimRows = items.map(({ sentence, entry }) => {
+    const m = entry.match;
+    const at = readAt.get(m.source?.url);
+    return `<tr><td>${escapeHtml(sentence)}</td><td>${escapeHtml(citationFor(m, numbers))}<br>
+      <q>${escapeHtml(m.quote || "")}</q></td><td>${at ? escapeHtml(when(at)) : "—"}</td></tr>`;
+  }).join("");
+
+  const html = `<!doctype html><html lang="en-GB"><head><meta charset="utf-8">
+<title>Proof of work: ${escapeHtml(docTitle)}</title>
+<style>
+  body { font: 14px/1.5 Georgia, serif; color: #1f2328; max-width: 860px; margin: 32px auto; padding: 0 20px; }
+  h1 { font-size: 22px; margin-bottom: 4px; } h2 { font-size: 16px; margin-top: 28px; }
+  .meta, .url, .note { color: #6b7280; font-size: 12px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid #e5e7eb; }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: #6b7280; }
+  q { color: #374151; }
+</style></head><body>
+<h1>Proof of work: ${escapeHtml(docTitle)}</h1>
+<div class="meta">Generated by Referee on ${escapeHtml(when(Date.now()))} · ${read.length} source${read.length === 1 ? "" : "s"} read · ${items.length} supported claim${items.length === 1 ? "" : "s"}</div>
+${summaryText ? `<p>${escapeHtml(summaryText)}</p>` : ""}
+<h2>Reading log</h2>
+${read.length ? `<table><tr><th>Read</th><th>Source</th></tr>${readingRows}</table>` : "<p>No reading has been recorded.</p>"}
+<h2>Claims and their evidence</h2>
+${items.length ? `<table><tr><th>Claim</th><th>Source and supporting passage</th><th>Source read</th></tr>${claimRows}</table>` : "<p>No supported claims yet.</p>"}
+<p class="note">Reading times were recorded by the Referee browser extension when each source was captured,
+and are kept on this computer. This report shows the research behind the writing; it is not tamper-proof.</p>
+<p class="note">To keep a copy, print this page (Cmd+P or Ctrl+P) and choose "Save as PDF".</p>
+</body></html>`;
+  window.open(URL.createObjectURL(new Blob([html], { type: "text/html" })), "_blank");
+}
+
+document.getElementById("proof").addEventListener("click", proofOfWork);
 
 const styleMenu = document.getElementById("citation-style");
 styleMenu.addEventListener("change", () => {
