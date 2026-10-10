@@ -5,19 +5,6 @@
 const READ_MS = 20000;      // time a page must be open and visible before it counts as read
 const MIN_SELECTION = 20;   // highlighting this many characters also counts as reading
 
-const SKIP = [
-  /\/\/(www\.)?google\.[^/]+\/search/,
-  /\/\/(www\.)?bing\.com\/search/,
-  /\/\/scholar\.google\./,
-  /\/\/(mail|outlook|calendar|docs|drive)\./,
-  /\/\/([^/]+\.)?(notion\.so|office\.com|live\.com|sharepoint\.com|overleaf\.com)\//,
-  /\/\/([^/]+\.)?(facebook|instagram|twitter|x|tiktok|reddit|youtube|linkedin)\.com\//,
-  /\/\/localhost[:/]/,
-  /\/\/([^/]+\.)?(paypal|stripe|monzo|revolut|starlingbank|barclays|hsbc|natwest|lloydsbank|santander|nationwide|halifax|chase|wellsfargo|bankofamerica)\.(com|co\.uk)\//,
-  /\/\/[^/]*(bank|banking)[^/]*\//,
-  /\/(login|signin|sign-in|checkout|payment|account)(\/|\?|$)/,
-];
-
 // Anything a person could type into, plus code and embedded pages, is removed before
 // the page leaves the tab: only readable content is sent.
 const PRIVATE = "input, textarea, select, button, script, noscript, style, iframe, object, embed, template, [contenteditable]";
@@ -36,7 +23,7 @@ async function capturing() {
   return Boolean(await chrome.runtime.sendMessage({ type: "writing" }));
 }
 
-if (!SKIP.some((pattern) => pattern.test(location.href))) {
+if (!isSkipped(location.href)) {
   let sent = false;
   let visibleMs = 0;
   let last = Date.now();
@@ -50,7 +37,7 @@ if (!SKIP.some((pattern) => pattern.test(location.href))) {
     sent = true;
     clearInterval(timer);
     chrome.runtime.sendMessage(
-      { type: "capture", body: { url: location.href, html: readableHtml() } },
+      { type: "capture", body: { url: location.href, title: document.title, html: readableHtml() } },
       (result) => console.log("[Referee] capture:", result)
     );
   }

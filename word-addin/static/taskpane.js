@@ -78,11 +78,6 @@ Office.onReady(() => {
   settings.set("Office.AutoShowTaskpaneWithDocument", true);
   settings.saveAsync();
 
-  // Tell the backend someone is writing, so the browser extension (in automatic mode)
-  // captures what they read while this panel is open.
-  const ping = () => fetch("/api/writing", { method: "POST" }).catch(() => {});
-  ping();
-  setInterval(ping, 60 * 1000);
 
   showWatching();
   if (autoToggle.checked) scheduleAutoCheck();
@@ -98,7 +93,17 @@ function showWatching() {
     : "Automatic checking is off. Use the buttons above to check.");
 }
 
+// Tell the backend someone is writing (at most once a minute), so the browser extension in
+// automatic mode captures what they read only while they're writing in Word.
+let lastSignal = 0;
+function signalWriting() {
+  if (Date.now() - lastSignal < 60 * 1000) return;
+  lastSignal = Date.now();
+  fetch("/api/writing", { method: "POST" }).catch(() => {});
+}
+
 function scheduleAutoCheck() {
+  signalWriting();
   if (!autoToggle.checked) return;
   clearTimeout(pauseTimer);
   pauseTimer = setTimeout(() => runCheck("document", false, true), PAUSE_MS);

@@ -18,6 +18,28 @@ const title = document.getElementById("title");
 
 const checks = new Map(); // sentence -> { state: "pending" | "done", match }
 const dismissed = new Set();
+let citationStyle = "apa"; // apa | harvard | ieee | ams, saved in the browser
+
+function style() {
+  return Cite.STYLES[citationStyle] || Cite.STYLES.apa;
+}
+
+const sourceKey = (source) => source.url || Cite.cleanTitle(source);
+
+// Numbered styles count sources in order of first citation in the text.
+function sourceNumbers(matched) {
+  const numbers = new Map();
+  for (const { entry } of matched) {
+    if (entry.match.label !== "supports" || !entry.match.source) continue;
+    const key = sourceKey(entry.match.source);
+    if (!numbers.has(key)) numbers.set(key, numbers.size + 1);
+  }
+  return numbers;
+}
+
+function citationFor(match, numbers) {
+  return style().inText(match.source, { number: numbers.get(sourceKey(match.source)), page: match.page });
+}
 let pauseTimer;
 
 // Inside the extension, requests go through the background worker; opened as a plain
@@ -26,7 +48,7 @@ async function api(type, body) {
   if (IN_EXTENSION) return chrome.runtime.sendMessage({ type, body });
   const response = await fetch(`${SERVER}/${type}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Referee": "1" },
     body: JSON.stringify(body),
   });
   return response.json();
@@ -113,11 +135,60 @@ function render() {
   growEditor();
 
   const matched = items.filter((item) => item.entry.state === "done");
-  renderCards(matched, items);
+  const numbers = sourceNumbers(matched);
+  renderCards(matched, items, numbers);
   renderSummary(matched);
+  renderReferences(matched, numbers);
 }
 
-function renderCards(matched, items) {
+// Reference list for every source that supports a sentence: alphabetical for author-date
+// styles, in order of first citation for numbered ones.
+function renderReferences(matched, numbers) {
+  const sources = new Map();
+  for (const { entry } of matched) {
+    const source = entry.match.source;
+    if (entry.match.label === "supports" && source) sources.set(sourceKey(source), source);
+  }
+  const ordered = [...sources.values()].sort(style().numbered
+    ? (a, b) => numbers.get(sourceKey(a)) - numbers.get(sourceKey(b))
+    : (a, b) => Cite.sortKey(a).localeCompare(Cite.sortKey(b)));
+  const entries = ordered.map((source) => style().reference(source, { number: numbers.get(sourceKey(source)) }));
+  document.getElementById("refs").hidden = entries.length === 0;
+  document.getElementById("ref-list").replaceChildren(...entries.map((text) => {
+    const item = document.createElement("li");
+    item.textContent = text;
+    return item;
+  }));
+  document.getElementById("copy-refs").onclick = () => copyText(
+    entries.join("\n"), `${entries.length} reference${entries.length === 1 ? "" : "s"} copied`);
+}
+
+// A link that opens the source scrolled to, and highlighting, the quoted passage (Chrome).
+function textFragmentUrl(url, quote) {
+  if (!quote) return url;
+  const words = quote.replace(/\s+/g, " ").trim().split(" ");
+  const encode = (text) => encodeURIComponent(text).replace(/-/g, "%2D");
+  const fragment = words.length > 10
+    ? `${encode(words.slice(0, 4).join(" "))},${encode(words.slice(-4).join(" "))}`
+    : encode(words.join(" "));
+  return `${url.split("#")[0]}#:~:text=${fragment}`;
+}
+
+let toastTimer;
+async function copyText(text, message) {
+  const toast = document.getElementById("toast");
+  try {
+    await navigator.clipboard.writeText(text);
+    toast.textContent = message;
+  } catch {
+    toast.textContent = "Couldn't copy. Select the text and copy it instead.";
+  }
+  toast.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
+function renderCards(matched, items, numbers) {
   cardsBox.innerHTML = "";
   emptyHint.hidden = matched.length > 0;
   for (const item of matched) {
@@ -125,7 +196,7 @@ function renderCards(matched, items) {
     const match = entry.match;
     const index = items.indexOf(item);
     const source = match.source || {};
-    const year = source.date ? ` · ${String(source.date).slice(0, 4)}` : "";
+    const year = (source.date ? ` · ${String(source.date).slice(0, 4)}` : "") + (match.page ? ` · p. ${match.page}` : "");
 
     const warnings = [];
     if (match.misquote && match.label !== "misquote") warnings.push("This quotation doesn't match the source exactly.");
@@ -138,8 +209,12 @@ function renderCards(matched, items) {
       <div class="label">${LABELS[match.label] || match.label}</div>
       <div class="sentence">${escapeHtml(sentence.length > 90 ? sentence.slice(0, 90) + "…" : sentence)}</div>
       <blockquote class="quote">“${escapeHtml(match.quote || "")}”</blockquote>
-      <div class="source"><a href="${escapeHtml(source.url || "#")}" target="_blank" rel="noopener">${escapeHtml(source.title || "Source")}</a>${escapeHtml(year)}</div>
+      <div class="source">${escapeHtml(Cite.cleanTitle(source))}${escapeHtml(year)}</div>
       ${warnings.map((w) => `<div class="warning">${escapeHtml(w)}</div>`).join("")}
+      <div class="actions">
+        ${match.label === "supports" ? `<button class="copy-citation">Copy ${escapeHtml(citationFor(match, numbers))}</button>` : ""}
+        ${source.url ? `<a class="open-source" href="${escapeHtml(textFragmentUrl(source.url, match.quote))}" target="_blank" rel="noopener">Open source</a>` : ""}
+      </div>
     `;
 
     card.querySelector(".dismiss").addEventListener("click", () => {
@@ -147,7 +222,8 @@ function renderCards(matched, items) {
       sendFeedback("dismissed", sentence, match);
       render();
     });
-    card.querySelector(".source a").addEventListener("click", () => sendFeedback("opened_source", sentence, match));
+    card.querySelector(".open-source")?.addEventListener("click", () => sendFeedback("opened_source", sentence, match));
+    card.querySelector(".copy-citation")?.addEventListener("click", () => copyText(citationFor(match, numbers), "Citation copied"));
 
     const mark = () => backdrop.querySelector(`mark[data-index="${index}"]`);
     card.addEventListener("mouseenter", () => mark()?.classList.add("active"));
@@ -165,6 +241,7 @@ function renderSummary(matched) {
 }
 
 editor.addEventListener("input", () => {
+  signalWriting();
   saveDraft();
   render();
   clearTimeout(pauseTimer);
@@ -219,10 +296,23 @@ async function setResearch(on) {
 
 async function showResearch() {
   const state = await researchState();
-  banner.classList.toggle("off", !state.research);
-  const topic = title.value.trim() || "your essay";
-  bannerText.textContent = state.research ? `Researching for: ${topic}` : "Research mode is off";
+  const automatic = !state.research && (state.mode ?? "auto") === "auto";
+  banner.classList.toggle("off", !state.research && !automatic);
+  const topic = title.value.trim() || "your writing";
+  if (state.research) bannerText.textContent = `Researching for: ${topic}`;
+  else if (automatic) bannerText.textContent = "Capturing your reading while you write";
+  else bannerText.textContent = "Research mode is off";
   bannerButton.textContent = state.research ? "Stop" : "Start";
+}
+
+// In automatic mode, Referee captures reading only while someone is writing - here, in
+// Word or in Obsidian. Typing here tells the backend so (at most once a minute); capture
+// stops a few minutes after the typing does.
+let lastSignal = 0;
+function signalWriting() {
+  if (!IN_EXTENSION || Date.now() - lastSignal < 60 * 1000) return;
+  lastSignal = Date.now();
+  chrome.runtime.sendMessage({ type: "writing-ping" }).catch(() => {});
 }
 
 bannerButton.addEventListener("click", async () => {
@@ -232,11 +322,38 @@ bannerButton.addEventListener("click", async () => {
 
 if (IN_EXTENSION) chrome.storage.onChanged.addListener(showResearch);
 
+// Newly captured reading can make a sentence citable that had no source before.
+if (IN_EXTENSION) {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes.captures) return;
+    for (const [sentence, entry] of checks) if (entry.state === "done" && !entry.match) checks.delete(sentence);
+    checkNewSentences();
+  });
+}
+
+const serverStatus = document.getElementById("server");
+async function showServer() {
+  const online = IN_EXTENSION
+    ? await chrome.runtime.sendMessage({ type: "server" })
+    : await fetch(`${SERVER}/`).then((r) => r.ok).catch(() => false);
+  serverStatus.dataset.state = online ? "online" : "offline";
+  serverStatus.textContent = online ? "" : "Server not running. Start it with: uvicorn main:app";
+}
+
+const styleMenu = document.getElementById("citation-style");
+styleMenu.addEventListener("change", () => {
+  citationStyle = styleMenu.value;
+  try { localStorage.setItem("referee-style", citationStyle); } catch {}
+  render();
+});
+
 (async () => {
+  try { citationStyle = localStorage.getItem("referee-style") || "apa"; } catch {}
+  styleMenu.value = citationStyle;
   loadDraft();
-  const state = await researchState();
-  if (IN_EXTENSION && !state.research && (state.mode ?? "auto") === "auto") await setResearch(true);
   showResearch();
   render();
   checkNewSentences();
+  showServer();
+  setInterval(showServer, 15000);
 })();

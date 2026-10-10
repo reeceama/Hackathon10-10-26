@@ -5,10 +5,14 @@
   "description": "Checks your writing against the sources you have read.",
   "permissions": [
     "storage",
-    "alarms"
+    "alarms",
+    "tabs"
   ],
   "host_permissions": [
-    "http://localhost:8000/*"
+    "http://localhost:8000/*",
+    "http://*/*",
+    "https://*/*",
+    "file:///*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -30,6 +34,7 @@
         "https://*/*"
       ],
       "js": [
+        "skip.js",
         "content.js"
       ],
       "run_at": "document_idle"

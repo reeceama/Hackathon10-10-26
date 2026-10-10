@@ -3,24 +3,41 @@
   <head>
     <meta charset="utf-8" />
     <style>
-      body { font-family: -apple-system, "Segoe UI", sans-serif; width: 260px; margin: 0; padding: 14px; color: #222; }
+      body { font-family: -apple-system, "Segoe UI", sans-serif; width: 300px; margin: 0; padding: 14px; color: #222; }
+      header { display: flex; justify-content: space-between; align-items: baseline; }
       h1 { font-size: 16px; margin: 0 0 2px; }
+      .server { font-size: 11px; color: #888; }
+      .server[data-state="online"] { color: #2b7a4b; }
+      .server[data-state="offline"] { color: #c0392b; }
       .tagline { font-size: 12px; color: #666; margin: 0 0 14px; }
       .row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; font-size: 13px; }
       select { font-size: 13px; }
       #status { font-size: 12px; color: #111; margin: 4px 0 12px; min-height: 16px; }
       #status.off { color: #888; }
       button { width: 100%; padding: 8px; border: 0; border-radius: 6px; background: #111; color: white; font-size: 13px; cursor: pointer; }
+      button.quiet { margin-top: 6px; background: none; color: #888; font-size: 12px; text-decoration: underline; }
       .switch { position: relative; width: 38px; height: 22px; }
       .switch input { display: none; }
       .slider { position: absolute; inset: 0; background: #ccc; border-radius: 22px; cursor: pointer; transition: 0.2s; }
       .slider::before { content: ""; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: white; border-radius: 50%; transition: 0.2s; }
       input:checked + .slider { background: #111; }
       input:checked + .slider::before { transform: translateX(16px); }
+      h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: #888; margin: 14px 0 6px; }
+      #saved-list { list-style: none; margin: 0 0 12px; padding: 0; max-height: 180px; overflow-y: auto; }
+      #saved-list li { padding: 6px 0; border-bottom: 1px solid #eee; font-size: 12px; }
+      #saved-list .t { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #saved-list .s { color: #888; font-size: 11px; }
+      #saved-list .s[data-status="saved"] { color: #2b7a4b; }
+      #saved-list .s[data-status="offline"], #saved-list .s[data-status="skipped"] { color: #c0392b; }
+      .hint { font-size: 11px; color: #888; margin: -4px 0 10px; }
+      .empty { font-size: 12px; color: #888; margin: 0 0 12px; }
     </style>
   </head>
   <body>
-    <h1>Referee</h1>
+    <header>
+      <h1>Referee</h1>
+      <span class="server" id="server" data-state="checking">Checking server…</span>
+    </header>
     <p class="tagline">Checks your writing against what you've read.</p>
 
     <div class="row">
@@ -38,12 +55,19 @@
     <div class="row">
       <span>Start automatically</span>
       <select id="mode">
+        <option value="auto">While I'm writing</option>
         <option value="manual">Manually only</option>
-        <option value="auto">When I write</option>
       </select>
     </div>
+    <p class="hint" id="mode-hint">Captures what you read only while you're writing in Word, Obsidian or the Referee editor.</p>
     <div id="status"></div>
+
+    <h2 id="saved-title">Saved pages</h2>
+    <ol id="saved-list"></ol>
+    <p class="empty" id="saved-empty">Pages you spend time on, or highlight text in, while research mode is on are saved here.</p>
+
     <button id="open-editor">Open editor</button>
+    <button class="quiet" id="forget">Forget saved pages</button>
     <script src="popup.js"></script>
   </body>
 </html>

@@ -175,6 +175,31 @@ aside h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; c
 }
 .card .dismiss:hover { color: var(--text); }
 
+.brand .server { font-weight: 400; font-size: 12px; margin-left: 10px; color: var(--muted); }
+.brand .server[data-state="offline"] { color: var(--contradicts); }
+
+.card .actions { display: flex; gap: 12px; margin-top: 8px; font-size: 12px; }
+.card .actions button, .card .actions a {
+  border: 0; background: none; padding: 0; cursor: pointer;
+  color: var(--brand); text-decoration: underline; font: inherit;
+}
+
+.refs { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+.refs-head { display: flex; justify-content: space-between; align-items: center; }
+.refs h2 { font: 600 16px Georgia, serif; margin: 0; }
+.refs-tools { display: flex; gap: 8px; align-items: center; }
+.refs-tools select { font-size: 12px; padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--page); }
+.refs .copy { border: 1px solid var(--line); background: var(--page); border-radius: 6px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+#ref-list { list-style: none; padding: 0; margin: 12px 0 0; font: 15px/1.6 Georgia, serif; }
+#ref-list li { padding-left: 2em; text-indent: -2em; margin-bottom: 8px; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: var(--brand); color: white; padding: 8px 14px; border-radius: 8px; font-size: 13px;
+  opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
 @media (max-width: 800px) {
   main { grid-template-columns: 1fr; padding: 0 16px; }
   .page { padding: 20px; }

@@ -8,7 +8,7 @@
   </head>
   <body>
     <header>
-      <div class="brand">Referee</div>
+      <div class="brand">Referee <span class="server" id="server" data-state="checking">Connecting…</span></div>
       <div id="research-banner" class="banner off">
         <span id="research-text">Research mode is off</span>
         <button id="research-toggle">Start</button>
@@ -23,6 +23,21 @@
           <textarea id="editor" spellcheck="true" placeholder="Start writing. Sentences are checked against your reading as you finish them."></textarea>
         </div>
         <footer id="summary"></footer>
+        <section class="refs" id="refs" hidden>
+          <div class="refs-head">
+            <h2>References</h2>
+            <div class="refs-tools">
+              <select id="citation-style" aria-label="Citation style">
+                <option value="apa">APA 7</option>
+                <option value="harvard">Harvard</option>
+                <option value="ieee">IEEE (computing)</option>
+                <option value="ams">AMS (mathematics)</option>
+              </select>
+              <button class="copy" id="copy-refs">Copy references</button>
+            </div>
+          </div>
+          <ol id="ref-list"></ol>
+        </section>
       </section>
 
       <aside>
@@ -32,6 +47,9 @@
       </aside>
     </main>
 
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="cite.js"></script>
     <script src="editor.js"></script>
   </body>
 </html>
