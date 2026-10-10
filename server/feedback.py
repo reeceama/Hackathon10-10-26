@@ -32,7 +32,11 @@ FEATURES = ["confidence", "score", "contradicts"]
 
 
 def features(marker):
-    """What the model learns from: verifier confidence, search similarity, and marker type."""
+
+    """
+    What the model learns from: verifier confidence, search similarity, and marker type.
+    """
+
     return [
         float(marker.get("confidence") or 0),
         float(marker.get("score") or 0),
@@ -41,16 +45,24 @@ def features(marker):
 
 
 class FeedbackModel:
-    """One person's behaviour events and the usefulness model fitted to them."""
+
+    """
+    One person's behaviour events and the usefulness model fitted to them.
+    """
 
     def __init__(self, path):
+
         self.path = Path(path)
         self.events = json.loads(self.path.read_text()) if self.path.exists() else []
         self.model = None
         self._fit()
 
     def _fit(self):
-        """Refit on every event so far, or fall back to showing everything if there's too little."""
+
+        """
+        Refit on every event so far, or fall back to showing everything if there's too little.
+        """
+
         useful = [EVENTS[e["event"]][0] for e in self.events]
         if len(self.events) < MIN_EVENTS or len(set(useful)) < 2:
             self.model = None
@@ -61,7 +73,11 @@ class FeedbackModel:
         self.model.fit(X, useful, logisticregression__sample_weight=weights)
 
     def record(self, event):
-        """Store one behaviour event and update the model. Returns False for unknown events."""
+
+        """
+        Store one behaviour event and update the model. Returns False for unknown events.
+        """
+
         if event.get("event") not in EVENTS:
             return False
         self.events.append(event)
@@ -70,17 +86,26 @@ class FeedbackModel:
         return True
 
     def usefulness(self, marker):
-        """Predicted chance this person finds the marker useful, or None during cold start."""
+
+        """
+        Predicted chance this person finds the marker useful, or None during cold start.
+        """
+
         if self.model is None:
             return None
         return float(self.model.predict_proba([features(marker)])[0][1])
 
     def should_show(self, marker):
+
         p = self.usefulness(marker)
         return p is None or p >= SHOW_MIN
 
     def summary(self):
-        """How much the model has learned - handy for the demo and debugging."""
+
+        """
+        How much the model has learned - handy for the demo and debugging.
+        """
+
         counts = {name: sum(e["event"] == name for e in self.events) for name in EVENTS}
         if self.model is None:
             return {"events": len(self.events), "counts": counts, "learning": False}
@@ -93,12 +118,14 @@ class FeedbackModel:
         }
 
     def reset(self):
+
         self.events = []
         self.path.unlink(missing_ok=True)
         self._fit()
 
 
 if __name__ == "__main__":
+
     # Simulated session: the person opens sources for confident markers and
     # dismisses or ignores weak ones. Weak markers should then be hidden.
     import tempfile
