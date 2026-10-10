@@ -1,5 +1,9 @@
-// Runs on every page. While research mode is on, sends the page to the backend,
-// which keeps it only if it has real article text.
+// Runs on every page. While research mode is on, it waits until the page has actually
+// been read (open and visible for READ_MS, or text highlighted), then sends it to the
+// backend, which keeps it only if it has real article text.
+
+const READ_MS = 20000;      // time a page must be open and visible before it counts as read
+const MIN_SELECTION = 20;   // highlighting this many characters also counts as reading
 
 const SKIP = [
   /\/\/(www\.)?google\.[^/]+\/search/,
@@ -24,16 +28,43 @@ function readableHtml() {
   return copy.outerHTML;
 }
 
-(async () => {
-  if (SKIP.some((pattern) => pattern.test(location.href))) return;
+// Research mode on, or (automatic mode only) the Word add-in reports someone writing.
+async function capturing() {
   const { research, mode } = await chrome.storage.local.get(["research", "mode"]);
-  // In automatic mode, writing in Word (its Referee panel is open) also counts as researching.
-  const writing = !research && (mode ?? "auto") === "auto" && (await chrome.runtime.sendMessage({ type: "writing" }));
-  if (!research && !writing) return;
-  if (document.querySelector('input[type="password"]')) return; // login, banking and account pages
+  if (research) return true;
+  if ((mode ?? "manual") !== "auto") return false;
+  return Boolean(await chrome.runtime.sendMessage({ type: "writing" }));
+}
 
-  chrome.runtime.sendMessage(
-    { type: "capture", body: { url: location.href, html: readableHtml() } },
-    (result) => console.log("[Referee] capture:", result)
-  );
-})();
+if (!SKIP.some((pattern) => pattern.test(location.href))) {
+  let sent = false;
+  let visibleMs = 0;
+  let last = Date.now();
+  let nextTry = 0; // when research mode is off, re-check every 10s rather than every tick
+
+  async function capture() {
+    if (sent || Date.now() < nextTry) return;
+    nextTry = Date.now() + 10000;
+    if (document.querySelector('input[type="password"]')) return; // login, banking and account pages
+    if (!(await capturing())) return;
+    sent = true;
+    clearInterval(timer);
+    chrome.runtime.sendMessage(
+      { type: "capture", body: { url: location.href, html: readableHtml() } },
+      (result) => console.log("[Referee] capture:", result)
+    );
+  }
+
+  // Count only time the tab is actually visible. Checked once a second; the storage
+  // lookup in capturing() happens only when the page qualifies, not every tick.
+  const timer = setInterval(() => {
+    const now = Date.now();
+    if (document.visibilityState === "visible") visibleMs += now - last;
+    last = now;
+    if (visibleMs >= READ_MS) capture().catch(() => {});
+  }, 1000);
+
+  document.addEventListener("mouseup", () => {
+    if (String(window.getSelection()).trim().length >= MIN_SELECTION) capture().catch(() => {});
+  });
+}
