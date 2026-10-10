@@ -1,0 +1,10 @@
+.referee-summary { margin-bottom: 10px; color: var(--text-muted); }
+.referee-card { border: 1px solid var(--background-modifier-border); border-left-width: 4px; border-radius: 6px; padding: 8px 10px; margin-bottom: 8px; }
+.referee-card.supports { border-left-color: var(--color-green); }
+.referee-card.contradicts { border-left-color: var(--color-red); }
+.referee-card.misquote, .referee-card.needs { border-left-color: var(--color-orange); }
+.referee-label { font-weight: 600; }
+.referee-sentence { color: var(--text-muted); font-size: 0.9em; margin: 4px 0; }
+.referee-quote { font-style: italic; margin: 4px 0; }
+.referee-warning { color: var(--color-orange); font-size: 0.9em; margin-top: 4px; }
+.referee-card button { margin-top: 6px; margin-right: 6px; }
