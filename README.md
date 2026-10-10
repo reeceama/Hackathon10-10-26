@@ -299,8 +299,8 @@ https://doi.org/10.18653/v1/2021.acl-demo.15
 
 ## 11. Team
 
-- [sedmoh](https://github.com/sedmoh): the browser extension, and the backend's page
-  extraction, embeddings, storage, search and API.
+- [sedmoh](https://github.com/sedmoh): frontend (the browser extension) and backend (page
+  extraction, embeddings, storage, search and the API).
 - [reeceama](https://github.com/reeceama): claim verification, evaluation and calibration,
   misquote and copying detection, the learning model, the Word add-in, and the browser
   extension's privacy features.
