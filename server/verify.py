@@ -48,7 +48,7 @@ def call_llm(system, user):
     """Ask Claude for a verdict. Structured outputs guarantee the reply matches Verdict."""
     response = client.messages.parse(
         model=MODEL,
-        max_tokens=300,  # a verdict is a few dozen tokens
+        max_tokens=1500,  # the model thinks before answering; replies used up to ~700 tokens in testing
         system=system,
         messages=[{"role": "user", "content": user}],
         output_format=Verdict,

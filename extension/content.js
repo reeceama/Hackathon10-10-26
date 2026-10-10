@@ -32,7 +32,7 @@ function readableHtml() {
 async function capturing() {
   const { research, mode } = await chrome.storage.local.get(["research", "mode"]);
   if (research) return true;
-  if ((mode ?? "manual") !== "auto") return false;
+  if ((mode ?? "auto") !== "auto") return false; // automatic is the default
   return Boolean(await chrome.runtime.sendMessage({ type: "writing" }));
 }
 

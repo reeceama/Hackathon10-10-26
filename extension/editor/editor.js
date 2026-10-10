@@ -235,7 +235,7 @@ if (IN_EXTENSION) chrome.storage.onChanged.addListener(showResearch);
 (async () => {
   loadDraft();
   const state = await researchState();
-  if (IN_EXTENSION && !state.research && (state.mode ?? "manual") === "auto") await setResearch(true);
+  if (IN_EXTENSION && !state.research && (state.mode ?? "auto") === "auto") await setResearch(true);
   showResearch();
   render();
   checkNewSentences();
