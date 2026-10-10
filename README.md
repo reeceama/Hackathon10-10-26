@@ -175,6 +175,7 @@ of the demo.
 ---
 
 ## Team
-- **sedmoh:** backend: page extraction, embeddings, storage and search, API.
+- **sedmoh:** browser extension (research mode, page capture, editor), and the backend's
+  page extraction, embeddings, storage, search and API.
 - **Reece Mings-Alleyne:** claim verification, evaluation and calibration, misquote and
-  copying detection, the learning model, browser extension integration.
+  copying detection, the learning model, and the Word add-in (in development).
