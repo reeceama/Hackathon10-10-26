@@ -7,8 +7,8 @@ async function showStatus() {
   const state = await chrome.storage.local.get(["research", "until", "duration", "mode"]);
   research.checked = Boolean(state.research);
   duration.value = state.duration ?? "60";
-  mode.value = state.mode ?? "auto";
-  const writing = !state.research && (state.mode ?? "auto") === "auto" &&
+  mode.value = state.mode ?? "manual";
+  const writing = !state.research && (state.mode ?? "manual") === "auto" &&
     (await chrome.runtime.sendMessage({ type: "writing" }));
   if (writing) {
     statusLine.textContent = "Writing in Word: capturing articles you read.";
