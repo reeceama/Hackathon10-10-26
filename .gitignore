@@ -6,9 +6,14 @@ venv/
 __pycache__/
 *.pyc
 
-# Footnote's captured data (built at runtime, holds page content)
+# Captured reading and learned behaviour (built at runtime, personal)
 store.json
 store.npy
+feedback.json
+
+# Evaluation outputs
+server/eval_*.csv
+server/eval_pr.png
 
 # Editor and OS files
 .vscode/
