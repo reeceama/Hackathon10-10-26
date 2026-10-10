@@ -1,6 +1,7 @@
+import hashlib
 import re
 import sys
-from collections import Counter
+from collections import Counter, OrderedDict
 from typing import Literal, Optional
 
 import anthropic
@@ -44,8 +45,48 @@ class Verdict(BaseModel):
     quote: str
 
 
-def call_llm(system, user):
-    """Ask Claude for a verdict. Structured outputs guarantee the reply matches Verdict."""
+class VerdictCache:
+
+    """
+    Verdicts already paid for. Re-checking the same sentence against the same passages
+    (a reload, a re-check, the same sentence in two documents) reuses the earlier answer.
+    """
+
+    def __init__(self, size=2000):
+
+        self.size = size
+        self.verdicts = OrderedDict()
+
+    def key(self, system, user):
+
+        return hashlib.sha256(f"{MODEL}\n{system}\n{user}".encode()).hexdigest()
+
+    def get(self, key):
+
+        if key in self.verdicts:
+            self.verdicts.move_to_end(key)
+        return self.verdicts.get(key)
+
+    def put(self, key, verdict):
+
+        self.verdicts[key] = verdict
+        self.verdicts.move_to_end(key)
+        while len(self.verdicts) > self.size:
+            self.verdicts.popitem(last=False)
+
+
+cache = VerdictCache()
+
+
+def call_llm(system, user, use_cache=True):
+    """Ask Claude for a verdict. Structured outputs guarantee the reply matches Verdict.
+
+    use_cache=False always asks the model, e.g. when measuring run-to-run variation.
+    """
+    key = cache.key(system, user)
+    cached = cache.get(key) if use_cache else None
+    if cached is not None:
+        return cached
     response = client.messages.parse(
         model=MODEL,
         max_tokens=1500,  # the model thinks before answering; replies used up to ~700 tokens in testing
@@ -53,6 +94,8 @@ def call_llm(system, user):
         messages=[{"role": "user", "content": user}],
         output_format=Verdict,
     )
+    if response.parsed_output is not None:
+        cache.put(key, response.parsed_output)
     return response.parsed_output
 
 
@@ -175,7 +218,7 @@ def misquote_marker(sentence, candidates):
     return None
 
 
-def verify(sentence, candidates, threshold=THRESHOLD):
+def verify(sentence, candidates, threshold=THRESHOLD, use_cache=True):
     """Check a sentence against candidate passages.
 
     candidates: the top matches from store.search - [{"text", "source", "score"}, ...].
@@ -185,16 +228,16 @@ def verify(sentence, candidates, threshold=THRESHOLD):
     """
     if not candidates:
         return None
-    return _verified(sentence, candidates, threshold) or misquote_marker(sentence, candidates)
+    return _verified(sentence, candidates, threshold, use_cache) or misquote_marker(sentence, candidates)
 
 
-def _verified(sentence, candidates, threshold):
+def _verified(sentence, candidates, threshold, use_cache=True):
     """Claude's verdict, if it confidently supports or contradicts the sentence."""
     passages = "\n\n".join(f"Passage {i}:\n{c['text']}" for i, c in enumerate(candidates, start=1))
     user = f"Sentence:\n{sentence}\n\n{passages}"
 
     try:
-        result = call_llm(SYSTEM_PROMPT, user)
+        result = call_llm(SYSTEM_PROMPT, user, use_cache)
     except anthropic.APIError as e:
         print(f"[verify] API error: {e}")  # shows in the uvicorn terminal
         return None

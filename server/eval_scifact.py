@@ -89,7 +89,7 @@ def run():
 
     def check(row):
         # threshold=0 records every verdict; thresholds are applied in analyse()
-        match = verify(row.sentence, [{"text": row.passage, "source": {}}], threshold=0)
+        match = verify(row.sentence, [{"text": row.passage, "source": {}}], threshold=0, use_cache=False)
         return (match["label"], match["confidence"]) if match else ("neutral", 0.0)
 
     with ThreadPoolExecutor(max_workers=8) as pool:
