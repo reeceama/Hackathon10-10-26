@@ -83,13 +83,13 @@ def run():
     Run verify() on every pair with the threshold disabled, recording raw labels and confidences.
     """
 
-    import verify
+    from verify import verify
 
-    verify.THRESHOLD = 0  # record every verdict; thresholds are applied in analyse()
     df = pd.read_csv(PAIRS_CSV)
 
     def check(row):
-        match = verify.verify(row.sentence, [{"text": row.passage, "source": {}}])
+        # threshold=0 records every verdict; thresholds are applied in analyse()
+        match = verify(row.sentence, [{"text": row.passage, "source": {}}], threshold=0)
         return (match["label"], match["confidence"]) if match else ("neutral", 0.0)
 
     with ThreadPoolExecutor(max_workers=8) as pool:

@@ -3,7 +3,7 @@
 Each passage (from the Wikipedia article on the Mediterranean diet) has four sentences:
     copy        - copied without quotation marks            -> should flag
     light_edit  - copied with a word or two swapped          -> should flag
-    paraphrase  - same meaning, the student's own wording    -> should not flag
+    paraphrase  - same meaning, the person's own wording    -> should not flag
     own_words   - same topic, not based on this passage      -> should not flag
 
 Stock phrases (runs recurring across different sentences of the research) are ignored.

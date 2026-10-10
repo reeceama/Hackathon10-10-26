@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import trafilatura
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -6,11 +8,13 @@ from pydantic import BaseModel
 from extract import extract_page
 from store import add_page, clear, search
 from verify import verify
-import feedback
+from feedback import FeedbackModel
  
 # Minimum similarity score before a passage is sent to Claude at all.
 # Set this from the scores load_demo.py prints for your real demo sources.
 MIN_SCORE = 0.5
+
+feedback = FeedbackModel(Path(__file__).with_name("feedback.json"))
  
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
@@ -62,7 +66,7 @@ def check(req: CheckRequest):
     if len(sentence.split()) < 5:          # too short to carry a real claim
         return {"match": False}
  
-    results = search(sentence, k=3)
+    results = search(sentence, k=5)  # 3 missed the best passage in testing
     candidates = [r for r in results if r["score"] >= MIN_SCORE]
     if not candidates:
         return {"match": False}
@@ -70,7 +74,7 @@ def check(req: CheckRequest):
     verdict = verify(sentence, candidates)
     if verdict is None:
         return {"match": False}
-    if not feedback.should_show(verdict):  # this student keeps rejecting markers like this
+    if not feedback.should_show(verdict):  # this person keeps rejecting markers like this
         return {"match": False}
     # verdict includes "label": "supports" or "contradicts" - the editor must handle both
     return {"match": True, **verdict}

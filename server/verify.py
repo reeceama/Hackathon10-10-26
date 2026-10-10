@@ -16,6 +16,7 @@ THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.95, recall 0.
 NGRAM = 3  # length of the word runs compared when checking for copying
 STOCK_MIN = 4  # a run in at least this many different sentences of the research is stock phrasing
 TOO_CLOSE = 0.3  # share of the sentence's distinctive runs found in the passage
+MISQUOTE_MIN = 0.3  # a non-matching quotation is only a misquote if this much of it matches the reading
 
 SYSTEM_PROMPT = """You check whether a sentence from a student's essay is backed by sources they have read.
 
@@ -28,6 +29,8 @@ Labels:
 
 Rules:
 - Pick the single best passage, or none if all are neutral.
+- If passages disagree, judge by the one that addresses the claim most directly. A claim about the
+  general case is not contradicted by an exception or a qualification (e.g. "not in every country").
 - "quote" must be copied word for word from the chosen passage: the shortest span that justifies your label.
 - "passage" is the chosen passage's number, or null if none.
 - "confidence" is how sure you are of the label, from 0 to 1."""
@@ -122,6 +125,15 @@ def copied_share(text, source, n=None, stock=frozenset()):
     return len(own & ngrams(source, n)) / len(own)
 
 
+def is_misquote(quote, source):
+    """The quotation isn't in the source word for word, yet clearly comes from it.
+
+    A quotation that resembles nothing in the source probably comes from reading that
+    wasn't captured, so it isn't flagged.
+    """
+    return not quote_in_source(quote, source) and copied_share(quote, source) >= MISQUOTE_MIN
+
+
 def check_wording(sentence, passage, all_text=None, stock=frozenset()):
     """Quotes must match the source exactly; everything else must not copy the passage too closely.
 
@@ -131,20 +143,51 @@ def check_wording(sentence, passage, all_text=None, stock=frozenset()):
     """
     quotes, unquoted = split_quotes(sentence)
     return {
-        "misquote": any(not quote_in_source(q, all_text or passage) for q in quotes),
+        "misquote": any(is_misquote(q, all_text or passage) for q in quotes),
         "too_close": copied_share(unquoted, passage, stock=stock) >= TOO_CLOSE,
     }
 
 
-def verify(sentence, candidates):
+def misquote_marker(sentence, candidates):
+    """A marker for a misquotation, even when the claim itself wasn't verified.
+
+    The quote field holds the source sentence closest to what the person quoted,
+    so the frontend can show what the source actually says.
+    """
+    all_text = " ".join(c["text"] for c in candidates)
+    for quote in split_quotes(sentence)[0]:
+        if not is_misquote(quote, all_text):
+            continue
+        best = max(candidates, key=lambda c: copied_share(quote, c["text"]))
+        closest = max(SENTENCE_END.split(best["text"]), key=lambda s: copied_share(quote, s))
+        return {
+            "source": best["source"],
+            "passage": best["text"],
+            "quote": closest,
+            "confidence": 1.0,
+            "label": "misquote",
+            "score": best.get("score"),
+            "misquote": True,
+            "too_close": False,
+        }
+    return None
+
+
+def verify(sentence, candidates, threshold=THRESHOLD):
     """Check a sentence against candidate passages.
 
     candidates: the top matches from store.search - [{"text", "source", "score"}, ...].
-    Returns {"source", "passage", "quote", "confidence", "label", "score", "misquote", "too_close"} or None.
+    Returns {"source", "passage", "quote", "confidence", "label", "score", "misquote", "too_close"}
+    or None. label is "supports", "contradicts", or "misquote" (a quotation that doesn't match
+    the source, on a claim that couldn't be verified).
     """
     if not candidates:
         return None
+    return _verified(sentence, candidates, threshold) or misquote_marker(sentence, candidates)
 
+
+def _verified(sentence, candidates, threshold):
+    """Claude's verdict, if it confidently supports or contradicts the sentence."""
     passages = "\n\n".join(f"Passage {i}:\n{c['text']}" for i, c in enumerate(candidates, start=1))
     user = f"Sentence:\n{sentence}\n\n{passages}"
 
@@ -158,7 +201,7 @@ def verify(sentence, candidates):
     label = result.label
     confidence = result.confidence
     index = result.passage
-    if label not in ("supports", "contradicts") or confidence < THRESHOLD:
+    if label not in ("supports", "contradicts") or confidence < threshold:
         return None
     if not isinstance(index, int) or not 1 <= index <= len(candidates):
         return None
@@ -198,6 +241,7 @@ if __name__ == "__main__":
         ('The study "found that adults ... had a 30% lower incidence" of disease.', False, False),
         ("Adults who exercised three times a week had a 30% lower incidence of cardiovascular disease.", False, True),
         ("People who work out regularly are noticeably less likely to develop heart problems.", False, False),
+        ('As one author put it, "the evidence base is still developing" in this area.', False, False),
     ]
     print("Wording checks:")
     for sentence, misquote, too_close in wording_tests:
