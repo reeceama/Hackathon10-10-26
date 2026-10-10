@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from extract import extract_page
 from store import add_page, clear, search
 from verify import verify
+import feedback
  
 # Minimum similarity score before a passage is sent to Claude at all.
 # Set this from the scores load_demo.py prints for your real demo sources.
@@ -27,6 +28,15 @@ class CheckRequest(BaseModel):
  
 class CaptureUrlRequest(BaseModel):
     url: str
+
+
+class FeedbackRequest(BaseModel):
+    event: str            # "opened_source" | "edited_after" | "dismissed" | "ignored"
+    sentence: str = ""
+    url: str = ""
+    label: str = ""
+    confidence: float = 0
+    score: float = 0
  
  
 @app.get("/")
@@ -60,10 +70,28 @@ def check(req: CheckRequest):
     verdict = verify(sentence, candidates)
     if verdict is None:
         return {"match": False}
+    if not feedback.should_show(verdict):  # this student keeps rejecting markers like this
+        return {"match": False}
     # verdict includes "label": "supports" or "contradicts" - the editor must handle both
     return {"match": True, **verdict}
  
  
+@app.post("/feedback")
+def record_feedback(req: FeedbackRequest):
+    return {"ok": feedback.record(req.model_dump())}
+
+
+@app.get("/feedback")
+def feedback_summary():
+    return feedback.summary()
+
+
+@app.post("/feedback/reset")
+def reset_feedback():
+    feedback.reset()
+    return {"ok": True}
+
+
 @app.post("/clear")
 def clear_store():
     clear()
