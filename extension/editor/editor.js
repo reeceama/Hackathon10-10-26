@@ -7,6 +7,12 @@ const IN_EXTENSION = typeof chrome !== "undefined" && Boolean(chrome.runtime?.id
 const MIN_WORDS = 5;
 const PAUSE_MS = 800;
 const SENTENCE = /[^.!?]+[.!?]+["”’)\]]*/g;
+// A supporting source older than this many years gets a "check for newer evidence" note.
+const OLD_SOURCE_YEARS = 10;
+// One source backing more than this share of the supported claims counts as over-reliance.
+const RELIANCE_SHARE = 0.5;
+const RELIANCE_MIN_CLAIMS = 4;
+
 const LABELS = { supports: "Supported", contradicts: "Your source says otherwise", misquote: "Misquote" };
 
 const editor = document.getElementById("editor");
@@ -228,6 +234,11 @@ function renderCards(matched, items, numbers) {
     const warnings = [];
     if (match.misquote && match.label !== "misquote") warnings.push("This quotation doesn't match the source exactly.");
     if (match.too_close) warnings.push("Very close to the source's wording. Consider quoting it or rephrasing.");
+    const published = parseInt(String(source.date || ""), 10);
+    if (match.label === "supports" && published && new Date().getFullYear() - published > OLD_SOURCE_YEARS) {
+      warnings.push(`This source is from ${published}. Check whether newer evidence agrees.`);
+    }
+    if (match.mixed) warnings.push(`Mixed evidence: ${Cite.cleanTitle(match.mixed)} points the other way.`);
 
     const card = document.createElement("div");
     card.className = `card ${match.label}`;
@@ -302,7 +313,32 @@ function renderSummary(matched, unsourced) {
       `<span class="${kind}" style="flex:${n}" title="${n} ${kind}"></span>`).join("")}</div>
     <div class="evidence-text"><strong>${backed}% of your claims are backed by your reading.</strong>
       ${segments.map(([, n, words]) => `${n} ${words}`).join(" · ")}${pending ? ` · checking ${pending}…` : ""}</div>
+    ${balanceNotes(matched).map((note) => `<div class="evidence-note">${escapeHtml(note)}</div>`).join("")}
   ` : (pending ? `Checking ${pending}…` : "");
+}
+
+// Whole-piece checks: leaning on one source, and leaving out evidence against the argument.
+function balanceNotes(matched) {
+  const notes = [];
+  const supporting = matched.filter((item) => item.entry.match.label === "supports");
+  const bySource = new Map();
+  for (const item of supporting) {
+    const key = item.entry.match.source?.url;
+    if (key) bySource.set(key, (bySource.get(key) || 0) + 1);
+  }
+  const [topUrl, topCount] = [...bySource].sort((a, b) => b[1] - a[1])[0] || [];
+  if (supporting.length >= RELIANCE_MIN_CLAIMS && topCount / supporting.length > RELIANCE_SHARE) {
+    const top = supporting.find((item) => item.entry.match.source?.url === topUrl).entry.match.source;
+    notes.push(`${topCount} of your ${supporting.length} supported claims rest on one source (${Cite.cleanTitle(top)}). Consider backing some with others.`);
+  }
+  const mixed = supporting.filter((item) => item.entry.match.mixed).length;
+  const contradicted = matched.filter((item) => item.entry.match.label === "contradicts").length;
+  if (mixed) {
+    notes.push(`Your reading has evidence against ${mixed} of your supported claims. A balanced argument would mention it.`);
+  } else if (supporting.length >= RELIANCE_MIN_CLAIMS && !contradicted && bySource.size === 1) {
+    notes.push("Everything here comes from a single source, so the argument may be one-sided.");
+  }
+  return notes;
 }
 
 editor.addEventListener("input", () => {

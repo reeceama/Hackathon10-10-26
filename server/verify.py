@@ -35,7 +35,9 @@ Rules:
   general case is not contradicted by an exception or a qualification (e.g. "not in every country").
 - "quote" must be copied word for word from the chosen passage: the shortest span that justifies your label.
 - "passage" is the chosen passage's number, or null if none.
-- "confidence" is how sure you are of the label, from 0 to 1."""
+- "confidence" is how sure you are of the label, from 0 to 1.
+- "disagrees" is the number of another passage that points the opposite way to your chosen one
+  (supports where it contradicts, or the reverse), or null if none does."""
 
 
 class Verdict(BaseModel):
@@ -43,6 +45,7 @@ class Verdict(BaseModel):
     label: Literal["supports", "contradicts", "neutral"]
     confidence: float
     quote: str
+    disagrees: Optional[int] = None
 
 
 class VerdictCache:
@@ -261,8 +264,13 @@ def _verified(sentence, candidates, threshold, use_cache=True):
     if len(quote.split()) < MIN_QUOTE_WORDS or normalise(quote) not in normalise(chosen["text"]):
         return None  # never show a quote that isn't really in the source
 
+    # Mixed evidence: another passage in the reading points the other way.
+    other = result.disagrees
+    mixed = candidates[other - 1]["source"] if isinstance(other, int) and 1 <= other <= len(candidates) and other != index else None
+
     return {
         "source": chosen["source"],
+        "mixed": mixed,
         "passage": chosen["text"],
         "quote": quote,
         "confidence": confidence,
