@@ -1,7 +1,5 @@
 # Referee
 
-![Precision and recall on SciFact](images/precision_recall.png)
-
 Referee checks your writing against the sources you have read. A browser extension quietly
 captures the articles you read while researching, and as you write, each finished sentence is
 checked against that reading. Supported claims are shown with the exact quote that backs them,
@@ -22,12 +20,10 @@ that works inside what you're already doing rather than something you have to pr
 3. [Data and models](#3-data-and-models)
 4. [Validation](#4-validation)
 5. [Limitations](#5-limitations)
-6. [Cut features](#6-cut-features)
-7. [Repository layout](#7-repository-layout)
-8. [Running it](#8-running-it)
-9. [Future updates](#9-future-updates)
-10. [References and acknowledgements](#10-references-and-acknowledgements)
-11. [Team](#11-team)
+6. [Repository layout](#6-repository-layout)
+7. [Running it](#7-running-it)
+8. [Future updates](#8-future-updates)
+9. [Team](#9-team)
 
 ---
 
@@ -179,26 +175,7 @@ which is why it falls back to the evaluated threshold until it has seen both out
 **The skip list is a list.** It covers major banks, payment, login and account pages, but it
 can't name every private site. The password-box rule catches most of the rest.
 
-## 6. Cut features
-
-**Plain overlap for copying.** Measuring copied word runs alone flagged sentences written in the
-writer's own words, because a topic's stock phrasing appears everywhere. Replaced by the
-stock-phrase filter.
-
-**Longer word runs.** 4, 5 and 6-word runs were tested as a fix for the same problem. None
-separated copying from own words once a real stock phrase was included, so the run length wasn't
-the cause.
-
-**Three search candidates.** Searching for three passages missed the best one in testing, and
-the verifier then judged a weaker passage. Five candidates fixed it.
-
-**A two-label verifier.** Supports or not was replaced by supports, contradicts or neutral, so a
-source that says the opposite can be flagged instead of ignored.
-
-**Fetching pages on the server.** Fetching a URL from the backend hits paywalls. Capturing the
-page as the reader sees it in the browser includes articles they're logged in to.
-
-## 7. Repository layout
+## 6. Repository layout
 
 ```
 ├── server/                     backend, runs locally
@@ -223,12 +200,11 @@ page as the reader sees it in the browser includes articles they're logged in to
 │
 ├── word-addin/                 Word add-in, in development
 │
-├── images/                     figures
 ├── README.md
 └── .gitignore
 ```
 
-## 8. Running it
+## 7. Running it
 
 ```bash
 python3 -m venv .venv
@@ -261,7 +237,7 @@ To load the extension, open `chrome://extensions`, turn on developer mode, choos
 **Load unpacked** and select the `extension` folder. Switch on research mode, read some
 articles, then open the editor from the popup and start writing.
 
-## 9. Future updates
+## 8. Future updates
 
 **v0.2.0, Word integration.** Bring Referee into Microsoft Word: checking sentences as you type,
 and citations, sources and the bibliography handled through Word's own referencing tools, in
@@ -277,27 +253,7 @@ model and a free local one.
 and a provenance log that records your research process, as evidence of your own work when
 AI-writing detectors get it wrong.
 
-## 10. References and acknowledgements
-
-Wadden, D., Lin, S., Lo, K., Wang, L. L., van Zuylen, M., Cohan, A., & Hajishirzi, H. (2020).
-Fact or fiction: Verifying scientific claims. In *Proceedings of the 2020 Conference on
-Empirical Methods in Natural Language Processing* (pp. 7534–7550).
-https://doi.org/10.18653/v1/2020.emnlp-main.609
-
-Reimers, N., & Gurevych, I. (2019). Sentence-BERT: Sentence embeddings using Siamese BERT-networks.
-In *Proceedings of the 2019 Conference on Empirical Methods in Natural Language Processing*
-(pp. 3982–3992). https://doi.org/10.18653/v1/D19-1410
-
-Wilson, E. B. (1927). Probable inference, the law of succession, and statistical inference.
-*Journal of the American Statistical Association*, *22*(158), 209–212.
-https://doi.org/10.1080/01621459.1927.10502953
-
-Barbaresi, A. (2021). Trafilatura: A web scraping library and command-line tool for text
-discovery and extraction. In *Proceedings of the Joint Conference of the 59th Annual Meeting of
-the ACL and the 11th IJCNLP: System Demonstrations* (pp. 122–131).
-https://doi.org/10.18653/v1/2021.acl-demo.15
-
-## 11. Team
+## 9. Team
 
 - [sedmoh](https://github.com/sedmoh): frontend (the browser extension) and backend (page
   extraction, embeddings, storage, search and the API).
