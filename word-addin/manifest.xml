@@ -5,8 +5,8 @@
            xmlns:ov="http://schemas.microsoft.com/office/taskpaneappversionoverrides"
            xsi:type="TaskPaneApp">
   <Id>9df83cbc-6221-4ebb-a6f2-c73ccee1aff8</Id>
-  <Version>0.1.0.0</Version>
-  <ProviderName>Hackathon team</ProviderName>
+  <Version>1.0.0.4</Version>
+  <ProviderName>Referee</ProviderName>
   <DefaultLocale>en-GB</DefaultLocale>
   <DisplayName DefaultValue="Referee"/>
   <Description DefaultValue="Checks your writing against the sources you have read."/>

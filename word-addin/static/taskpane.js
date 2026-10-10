@@ -418,11 +418,19 @@ function sourceXml(source) {
   const name = author(source);
   const published = parts(source.date);
   const read = parts(accessed(source));
+  // Each person goes in Word's Author field ("Copeland, B.J."; several split on ";", "and" or "&").
+  // Anything that isn't a person's name goes in Corporate Author.
+  const people = name.split(/;|\s+and\s+|\s*&\s*/).map((n) => n.trim()).filter(Boolean).map((n) => {
+    const comma = /^([^,]+),\s*(.+)$/.exec(n);
+    if (comma) return { last: comma[1], first: comma[2] };
+    if (!isPerson(n)) return null;
+    const words = n.split(/\s+/);
+    return { last: words.pop(), first: words.join(" ") };
+  });
   let who = `<b:Corporate>${xml(name)}</b:Corporate>`;
-  if (isPerson(name)) {
-    const words = name.split(/\s+/);
-    const last = words.pop();
-    who = `<b:NameList><b:Person><b:Last>${xml(last)}</b:Last><b:First>${xml(words.join(" "))}</b:First></b:Person></b:NameList>`;
+  if (people.length && people.every(Boolean)) {
+    who = `<b:NameList>${people.map((n) =>
+      `<b:Person><b:Last>${xml(n.last)}</b:Last><b:First>${xml(n.first)}</b:First></b:Person>`).join("")}</b:NameList>`;
   }
   return `<b:Source><b:Tag>${sourceTag(source)}</b:Tag><b:SourceType>InternetSite</b:SourceType>` +
     `<b:Guid>{${crypto.randomUUID().toUpperCase()}}</b:Guid><b:Title>${xml(cleanTitle(source.title))}</b:Title>` +
