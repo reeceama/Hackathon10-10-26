@@ -13,7 +13,7 @@ load_dotenv()
 client = anthropic.Anthropic(timeout=10.0)  # never leave the editor waiting
 
 MODEL = "claude-haiku-5-5"
-THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.91 (95% CI 0.81-0.96), recall 0.76
+THRESHOLD = 0.7  # SciFact, current prompt: precision 0.96 (95% CI 0.87-0.99), recall 0.70; 0.6 gave 0.93 and 0.76
 # Calibrated in eval_wording.py (margin 0.32 between copying and own words on 21 sentences):
 NGRAM = 3  # length of the word runs compared when checking for copying
 STOCK_MIN = 4  # a run in at least this many different sentences of the research is stock phrasing
