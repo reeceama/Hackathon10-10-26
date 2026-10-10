@@ -11,14 +11,14 @@ load_dotenv()
 client = anthropic.Anthropic()
 
 MODEL = "claude-haiku-5-5"
-THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.95, recall 0.77
+THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.91 (95% CI 0.81-0.96), recall 0.76
 # Calibrated in eval_wording.py (margin 0.32 between copying and own words on 21 sentences):
 NGRAM = 3  # length of the word runs compared when checking for copying
 STOCK_MIN = 4  # a run in at least this many different sentences of the research is stock phrasing
 TOO_CLOSE = 0.3  # share of the sentence's distinctive runs found in the passage
 MISQUOTE_MIN = 0.3  # a non-matching quotation is only a misquote if this much of it matches the reading
 
-SYSTEM_PROMPT = """You check whether a sentence from a student's essay is backed by sources they have read.
+SYSTEM_PROMPT = """You check whether a sentence someone has written is backed by sources they have read.
 
 You will be given one sentence and one or more numbered passages. Decide whether any passage supports or contradicts the specific claim in the sentence.
 
