@@ -151,6 +151,31 @@ const Cite = (() => {
       },
     },
 
+    mla: {
+      name: "MLA 9",
+      numbered: false,
+      inText(source, where = {}) {
+        const names = splitAuthors(source.author).map(parseName).map((n) => n.last);
+        const who = names.length > 2 ? `${names[0]} et al.` : names.length ? names.join(" and ") : `“${shortTitle(source)}”`;
+        const at = where.page ? ` ${where.page}` : where.time != null ? `, ${timestamp(where.time)}` : "";
+        return `(${who}${at})`;
+      },
+      // Surname, First. "Title." Site, Day Mon. Year, URL. Accessed Day Mon. Year.
+      reference(source) {
+        const names = splitAuthors(source.author).map(parseName);
+        const full = (n) => (n.firsts.length ? `${n.last}, ${n.firsts.join(" ")}` : n.last);
+        let who = "";
+        if (names.length === 1) who = `${endStop(full(names[0]))} `;
+        if (names.length === 2) who = `${full(names[0])}, and ${names[1].firsts.join(" ")} ${names[1].last}. `;
+        if (names.length > 2) who = `${full(names[0])}, et al. `;
+        const date = (d) => [d.day, d.month ? SHORT_MONTHS[d.month - 1] : null, d.year].filter(Boolean).join(" ");
+        const d = parseDate(source.date);
+        const a = accessed(source);
+        const container = [site(source), d ? date(d) : null, source.url].filter(Boolean).join(", ");
+        return `${who}“${endStop(cleanTitle(source))}” ${container}. Accessed ${date(a)}.`;
+      },
+    },
+
     ieee: {
       name: "IEEE",
       numbered: true,

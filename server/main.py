@@ -21,6 +21,7 @@ from feedback import FeedbackModel
 # Minimum similarity score before a passage is sent to Claude at all.
 # Set this from the scores load_demo.py prints for your real demo sources.
 MIN_SCORE = 0.5
+CLOSEST_SCORE = 0.3  # loosely related reading worth suggesting for an unsupported claim
 
 feedback = FeedbackModel(Path(__file__).with_name("feedback.json"))
 
@@ -162,16 +163,28 @@ def capture_video(req: CaptureVideoRequest):
     return {"ok": True, "passages": added}
 
 
+def closest_sources(results, limit=3):
+    seen, closest = set(), []
+    for r in results:
+        url = r["source"].get("url")
+        if url in seen or r["score"] < CLOSEST_SCORE:
+            continue
+        seen.add(url)
+        closest.append({"title": r["source"].get("title"), "url": url, "page": r.get("page"), "time": r.get("time")})
+    return closest[:limit]
+
+
 @app.post("/check")
 def check(req: CheckRequest):
     sentence = req.sentence.strip()
     if len(sentence.split()) < 5:          # too short to carry a real claim
         return {"match": False}
  
-    # No supporting reading: say whether the sentence reads like a claim that needs one.
-    unsupported = {"match": False, "needs_source": needs_source(sentence)}
-
     results = search(sentence, k=5, project=req.project or None)  # 3 missed the best passage in testing
+
+    # No supporting reading: say whether the sentence reads like a claim that needs one, and
+    # which sources already read come closest, as places to look. Nothing is written for them.
+    unsupported = {"match": False, "needs_source": needs_source(sentence), "closest": closest_sources(results)}
     candidates = [r for r in results if r["score"] >= MIN_SCORE]
     if not candidates:
         return unsupported

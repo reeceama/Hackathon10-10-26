@@ -1,3 +1,4 @@
+import difflib
 import hashlib
 import re
 import sys
@@ -36,6 +37,9 @@ Rules:
 - "quote" must be copied word for word from the chosen passage: the shortest span that justifies your label.
 - "passage" is the chosen passage's number, or null if none.
 - "confidence" is how sure you are of the label, from 0 to 1.
+- "together_with" is the number of a second passage, from a different source, when the claim only
+  holds by combining the two (each backs part of it), or null. Use it only when no single passage
+  supports the whole claim.
 - "disagrees" is the number of another passage that points the opposite way to your chosen one
   (supports where it contradicts, or the reverse), or null if none does."""
 
@@ -46,6 +50,7 @@ class Verdict(BaseModel):
     confidence: float
     quote: str
     disagrees: Optional[int] = None
+    together_with: Optional[int] = None
 
 
 class VerdictCache:
@@ -195,6 +200,37 @@ def check_wording(sentence, passage, all_text=None, stock=frozenset()):
     }
 
 
+NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
+
+
+def wrong_numbers(sentence, passage):
+    """Figures and years in the sentence that the supporting passage doesn't contain.
+
+    Only checked when the passage gives figures of its own, so a sentence adding a date
+    from elsewhere isn't flagged against a passage with no numbers at all.
+    """
+    found = {n.replace(",", "") for n in NUMBER.findall(passage)}
+    if not found:
+        return []
+    return [n for n in NUMBER.findall(sentence) if n.replace(",", "") not in found]
+
+
+def quote_changes(quote, source_text):
+    """Where a quotation differs from the closest source wording, word by word."""
+    wrote, said = quote.split(), source_text.split()
+    clean = lambda w: normalise(w)
+    matcher = difflib.SequenceMatcher(a=[clean(w) for w in wrote], b=[clean(w) for w in said], autojunk=False)
+    blocks = [b for b in matcher.get_matching_blocks() if b.size]
+    if not blocks:
+        return []
+    # Only compare against the stretch of source the quotation lines up with.
+    start, end = blocks[0].b, blocks[-1].b + blocks[-1].size
+    matcher.set_seq2([clean(w) for w in said[start:end]])
+    said = said[start:end]
+    return [{"wrote": " ".join(wrote[i1:i2]), "source": " ".join(said[j1:j2])}
+            for tag, i1, i2, j1, j2 in matcher.get_opcodes() if tag != "equal"]
+
+
 def misquote_marker(sentence, candidates):
     """A marker for a misquotation, even when the claim itself wasn't verified.
 
@@ -207,12 +243,14 @@ def misquote_marker(sentence, candidates):
             continue
         best = max(candidates, key=lambda c: copied_share(quote, c["text"]))
         closest = max(SENTENCE_END.split(best["text"]), key=lambda s: copied_share(quote, s))
+        changes = quote_changes(quote, closest)
         return {
             "source": best["source"],
             "passage": best["text"],
             "quote": closest,
             "confidence": 1.0,
             "label": "misquote",
+            "changes": changes,
             "score": best.get("score"),
             "page": best.get("page"),
             "time": best.get("time"),
@@ -268,9 +306,20 @@ def _verified(sentence, candidates, threshold, use_cache=True):
     other = result.disagrees
     mixed = candidates[other - 1]["source"] if isinstance(other, int) and 1 <= other <= len(candidates) and other != index else None
 
+    pair = result.together_with
+    together = (candidates[pair - 1] if label == "supports" and isinstance(pair, int)
+                and 1 <= pair <= len(candidates) and pair != index else None)
+
+    all_text = " ".join(c["text"] for c in candidates)
+    misquoted = [q for q in split_quotes(sentence)[0] if is_misquote(q, all_text)]
+    closest = max(SENTENCE_END.split(all_text), key=lambda s: copied_share(misquoted[0], s)) if misquoted else ""
+
     return {
         "source": chosen["source"],
         "mixed": mixed,
+        "changes": quote_changes(misquoted[0], closest) if misquoted else [],
+        "together_with": {"source": together["source"], "page": together.get("page"), "time": together.get("time")} if together else None,
+        "wrong_numbers": wrong_numbers(sentence, chosen["text"] + (" " + together["text"] if together else "")) if label == "supports" else [],
         "passage": chosen["text"],
         "quote": quote,
         "confidence": confidence,

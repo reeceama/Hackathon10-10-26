@@ -83,6 +83,7 @@ async function checkNewSentences() {
           state: "done",
           match: result.match ? result : null,
           needsSource: !result.match && Boolean(result.needs_source),
+          closest: result.closest || [],
         });
       })
       .catch(() => {
@@ -224,7 +225,7 @@ function renderCards(matched, items, numbers) {
     const match = entry.match;
     const index = items.indexOf(item);
     if (!match) {
-      cardsBox.appendChild(needsSourceCard(sentence, index));
+      cardsBox.appendChild(needsSourceCard(sentence, index, entry.closest));
       continue;
     }
     const source = match.source || {};
@@ -238,6 +239,12 @@ function renderCards(matched, items, numbers) {
     if (match.label === "supports" && published && new Date().getFullYear() - published > OLD_SOURCE_YEARS) {
       warnings.push(`This source is from ${published}. Check whether newer evidence agrees.`);
     }
+    for (const n of match.wrong_numbers || []) warnings.push(`“${n}” doesn't appear in the source. Check the figure.`);
+    for (const c of (match.changes || []).slice(0, 3)) {
+      warnings.push(c.wrote && c.source ? `You quoted “${c.wrote}”; the source says “${c.source}”.`
+        : c.wrote ? `“${c.wrote}” isn't in the source's wording.` : `You left out “${c.source}”.`);
+    }
+    if (match.together_with) warnings.push(`This claim combines two sources: also cite ${Cite.cleanTitle(match.together_with.source)}.`);
     if (match.mixed) warnings.push(`Mixed evidence: ${Cite.cleanTitle(match.mixed)} points the other way.`);
 
     const card = document.createElement("div");
@@ -271,7 +278,7 @@ function renderCards(matched, items, numbers) {
 }
 
 // A claim nothing in the reading supports: a prompt to find a source, not a judgement.
-function needsSourceCard(sentence, index) {
+function needsSourceCard(sentence, index, closest = []) {
   const card = document.createElement("div");
   card.className = "card needs";
   card.innerHTML = `
@@ -279,6 +286,8 @@ function needsSourceCard(sentence, index) {
     <div class="label">Needs a source</div>
     <div class="sentence">${escapeHtml(sentence.length > 90 ? sentence.slice(0, 90) + "…" : sentence)}</div>
     <div class="hint">This reads like a factual claim, but nothing you've read supports it yet.</div>
+    ${closest.length ? `<div class="hint">Closest in your reading:</div><ul class="closest">${closest.map((c) =>
+      `<li><a href="${escapeHtml(c.time != null ? `${c.url}&t=${c.time}s` : c.url)}" target="_blank" rel="noopener">${escapeHtml(Cite.cleanTitle(c))}</a></li>`).join("")}</ul>` : ""}
   `;
   card.querySelector(".dismiss").addEventListener("click", () => {
     dismissed.add(sentence);
