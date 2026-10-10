@@ -1,4 +1,6 @@
 import re
+import sys
+from collections import Counter
 from typing import Literal, Optional
 
 import anthropic
@@ -10,7 +12,10 @@ client = anthropic.Anthropic()
 
 MODEL = "claude-haiku-5-5"
 THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.95, recall 0.77
-TOO_CLOSE = 0.5  # share of the sentence's unquoted word trigrams copied from the source
+# Calibrated in eval_wording.py (margin 0.32 between copying and own words on 21 sentences):
+NGRAM = 3  # length of the word runs compared when checking for copying
+STOCK_MIN = 4  # a run in at least this many different sentences of the research is stock phrasing
+TOO_CLOSE = 0.3  # share of the sentence's distinctive runs found in the passage
 
 SYSTEM_PROMPT = """You check whether a sentence from a student's essay is backed by sources they have read.
 
@@ -47,6 +52,7 @@ def call_llm(system, user):
     return response.parsed_output
 
 
+SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
 QUOTED = re.compile(r'"([^"]+)"|“([^”]+)”')
 GAPS = re.compile(r"\.\.\.|…|\[[^\]]*\]")  # ellipses and [editorial insertions]
 
@@ -82,25 +88,51 @@ def quote_in_source(quote, source):
     return True
 
 
-def trigrams(text):
+def ngrams(text, n=None):
+    """The set of n-word runs in the text."""
+    n = n or NGRAM
     words = re.findall(r"[a-z0-9']+", normalise(text))
-    return {tuple(words[i:i + 3]) for i in range(len(words) - 2)}
+    return {tuple(words[i:i + n]) for i in range(len(words) - n + 1)}
 
 
-def copied_share(text, source):
-    """Share of the text's word trigrams that also appear in the source (0 to 1)."""
-    own = trigrams(text)
+def stock_phrases(texts, n=None, min_count=None):
+    """Word runs that recur across different sentences of the research.
+
+    A run like "the mediterranean diet is associated" that appears all over the
+    reading is the topic's standard wording, not copying from one passage.
+    Counted over distinct sentences because stored passages overlap.
+    """
+    min_count = min_count or STOCK_MIN
+    sentences = {normalise(s) for text in texts for s in SENTENCE_END.split(text)}
+    counts = Counter(run for s in sentences for run in ngrams(s, n))
+    return {run for run, count in counts.items() if count >= min_count}
+
+
+def research_passages():
+    """Every passage captured so far, if the server has loaded the store (empty in tests)."""
+    store = sys.modules.get("store")
+    return [p["text"] for p in getattr(store, "_passages", [])]
+
+
+def copied_share(text, source, n=None, stock=frozenset()):
+    """Share of the text's distinctive n-word runs that also appear in the source (0 to 1)."""
+    own = ngrams(text, n) - stock
     if not own:
         return 0.0
-    return len(own & trigrams(source)) / len(own)
+    return len(own & ngrams(source, n)) / len(own)
 
 
-def check_wording(sentence, source):
-    """Quotes must match the source exactly; everything else must not copy it too closely."""
+def check_wording(sentence, passage, all_text=None, stock=frozenset()):
+    """Quotes must match the source exactly; everything else must not copy the passage too closely.
+
+    Quotations are checked against all_text (every candidate passage) when given,
+    since a quotation may come from a neighbouring passage. Stock phrases are
+    ignored when measuring copying.
+    """
     quotes, unquoted = split_quotes(sentence)
     return {
-        "misquote": any(not quote_in_source(q, source) for q in quotes),
-        "too_close": copied_share(unquoted, source) >= TOO_CLOSE,
+        "misquote": any(not quote_in_source(q, all_text or passage) for q in quotes),
+        "too_close": copied_share(unquoted, passage, stock=stock) >= TOO_CLOSE,
     }
 
 
@@ -143,8 +175,12 @@ def verify(sentence, candidates):
         "confidence": confidence,
         "label": label,
         "score": chosen.get("score"),
-        # Checked against all candidates: a quotation may come from a neighbouring passage.
-        **check_wording(sentence, " ".join(c["text"] for c in candidates)),
+        **check_wording(
+            sentence,
+            chosen["text"],
+            all_text=" ".join(c["text"] for c in candidates),
+            stock=stock_phrases(research_passages()),
+        ),
     }
 
 
