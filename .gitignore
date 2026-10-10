@@ -1,5 +1,16 @@
+# Secrets
 .env
+
+# Python
 venv/
 __pycache__/
 *.pyc
+
+# Footnote's captured data (built at runtime, holds page content)
+store.json
+store.npy
+
+# Editor and OS files
+.vscode/
 .DS_Store
+Thumbs.db
