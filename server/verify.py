@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
-client = anthropic.Anthropic()
+client = anthropic.Anthropic(timeout=10.0)  # never leave the editor waiting
 
 MODEL = "claude-haiku-5-5"
 THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.91 (95% CI 0.81-0.96), recall 0.76
@@ -17,6 +17,7 @@ NGRAM = 3  # length of the word runs compared when checking for copying
 STOCK_MIN = 4  # a run in at least this many different sentences of the research is stock phrasing
 TOO_CLOSE = 0.3  # share of the sentence's distinctive runs found in the passage
 MISQUOTE_MIN = 0.3  # a non-matching quotation is only a misquote if this much of it matches the reading
+MIN_QUOTE_WORDS = 4  # shortest supporting quote accepted from the verifier
 
 SYSTEM_PROMPT = """You check whether a sentence someone has written is backed by sources they have read.
 
@@ -47,7 +48,7 @@ def call_llm(system, user):
     """Ask Claude for a verdict. Structured outputs guarantee the reply matches Verdict."""
     response = client.messages.parse(
         model=MODEL,
-        max_tokens=4000,
+        max_tokens=300,  # a verdict is a few dozen tokens
         system=system,
         messages=[{"role": "user", "content": user}],
         output_format=Verdict,
@@ -193,7 +194,8 @@ def _verified(sentence, candidates, threshold):
 
     try:
         result = call_llm(SYSTEM_PROMPT, user)
-    except anthropic.APIError:
+    except anthropic.APIError as e:
+        print(f"[verify] API error: {e}")  # shows in the uvicorn terminal
         return None
     if result is None:
         return None
@@ -208,7 +210,10 @@ def _verified(sentence, candidates, threshold):
 
     chosen = candidates[index - 1]
     quote = result.quote
-    if quote not in chosen["text"]:
+    # The quote must be real text from the source. An empty or tiny quote would pass a plain
+    # "in" check ("" is in every string), so require a few words, and compare normalised text
+    # so curly quotes or spacing differences don't reject a genuine quote.
+    if len(quote.split()) < MIN_QUOTE_WORDS or normalise(quote) not in normalise(chosen["text"]):
         return None  # never show a quote that isn't really in the source
 
     return {
