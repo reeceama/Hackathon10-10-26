@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Referee</title>
+    <link rel="stylesheet" href="editor.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">Referee</div>
+      <div id="research-banner" class="banner off">
+        <span id="research-text">Research mode is off</span>
+        <button id="research-toggle">Start</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="page">
+        <input id="title" placeholder="Essay title" />
+        <div class="writing">
+          <div id="backdrop" aria-hidden="true"></div>
+          <textarea id="editor" spellcheck="true" placeholder="Start writing. Sentences are checked against your reading as you finish them."></textarea>
+        </div>
+        <footer id="summary"></footer>
+      </section>
+
+      <aside>
+        <h2>Sources</h2>
+        <p id="empty" class="hint">Citations and warnings appear here as you write.</p>
+        <div id="cards"></div>
+      </aside>
+    </main>
+
+    <script src="editor.js"></script>
+  </body>
+</html>

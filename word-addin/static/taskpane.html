@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Referee</title>
+    <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+    <style>
+      :root { color-scheme: light dark; --text: #1f2328; --muted: #666; --button: #111; --button-text: #fff; }
+      @media (prefers-color-scheme: dark) {
+        :root { --text: #f2f2f2; --muted: #aaa; --button: #f2f2f2; --button-text: #111; }
+      }
+      body { font-family: -apple-system, "Segoe UI", sans-serif; margin: 16px; color: var(--text); background: transparent; }
+      h1 { font-size: 18px; margin: 0 0 4px; }
+      p.tagline { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+      button { width: 100%; padding: 10px; font-size: 14px; border: 0; border-radius: 6px;
+               background: var(--button); color: var(--button-text); cursor: pointer; }
+      button:disabled { opacity: 0.5; cursor: default; }
+      button.secondary { margin-top: 8px; background: transparent; color: var(--text); border: 1px solid var(--muted); }
+      .links { display: flex; justify-content: space-between; margin-top: 6px; }
+      button.link { width: auto; padding: 4px 0; background: none; color: var(--muted); font-size: 12px; text-decoration: underline; }
+      .toggle { display: block; margin-top: 10px; font-size: 12px; color: var(--muted); }
+      .toggle.auto { margin: 0 0 10px; font-size: 13px; color: var(--text); }
+      .key { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; font-size: 12px; color: var(--muted); }
+      .key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+      #status { margin-top: 12px; font-size: 13px; color: var(--text); white-space: pre-line; }
+      ul { padding-left: 18px; font-size: 13px; }
+      li { margin-bottom: 6px; }
+    </style>
+  </head>
+  <body>
+    <h1>Referee</h1>
+    <p class="tagline">Checks your writing against the sources you have read.</p>
+    <label class="toggle auto"><input type="checkbox" id="auto" checked /> Check as I write</label>
+    <button id="check" disabled>Check new sentences</button>
+    <button id="check-selection" class="secondary" disabled>Check selected text</button>
+    <div class="links">
+      <button id="recheck" class="link" disabled>Re-check everything</button>
+      <button id="clear" class="link" disabled>Clear Referee marks</button>
+    </div>
+    <label class="toggle">Referencing style
+      <select id="style"><option value="apa">APA 7</option><option value="harvard">Harvard</option></select>
+    </label>
+    <label class="toggle"><input type="checkbox" id="dark" /> Dark mode colours</label>
+    <div class="key">
+      <span><i style="background:#00FF00"></i><u>Supported</u></span>
+      <span><i style="background:#FFFF00"></i><u style="text-decoration-style:dotted">Check wording</u></span>
+      <span><i style="background:#FF0000"></i><u style="text-decoration-style:wavy">Contradicted</u></span>
+    </div>
+    <div id="status">Loading…</div>
+    <ul id="results"></ul>
+    <script src="taskpane.js?v=13"></script>
+  </body>
+</html>

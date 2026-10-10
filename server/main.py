@@ -1,3 +1,5 @@
+import time
+from datetime import date
 from pathlib import Path
 
 import trafilatura
@@ -15,6 +17,31 @@ from feedback import FeedbackModel
 MIN_SCORE = 0.5
 
 feedback = FeedbackModel(Path(__file__).with_name("feedback.json"))
+
+
+class WritingSession:
+
+    """
+    Whether someone is writing right now. The Word add-in pings while its panel is open;
+    in automatic mode the browser extension captures reading while this is active.
+    """
+
+    ACTIVE_FOR = 5 * 60  # seconds after the last ping
+
+    def __init__(self):
+
+        self.last_ping = 0.0
+
+    def ping(self):
+
+        self.last_ping = time.time()
+
+    def active(self):
+
+        return time.time() - self.last_ping < self.ACTIVE_FOR
+
+
+writing = WritingSession()
  
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
@@ -45,7 +72,7 @@ class FeedbackRequest(BaseModel):
  
 @app.get("/")
 def health():
-    return {"status": "Footnote server running"}
+    return {"status": "Referee server running"}
  
  
 @app.post("/capture")
@@ -54,6 +81,7 @@ def capture(req: CaptureRequest):
         _, metadata, passages = extract_page(req.html, url=req.url)
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
+    metadata["captured_at"] = date.today().isoformat()  # APA access date
     added = add_page(metadata, passages)
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
@@ -94,6 +122,17 @@ def feedback_summary():
 def reset_feedback():
     feedback.reset()
     return {"ok": True}
+
+
+@app.post("/writing")
+def writing_ping():
+    writing.ping()
+    return {"ok": True}
+
+
+@app.get("/writing")
+def writing_status():
+    return {"active": writing.active()}
 
 
 @app.post("/clear")

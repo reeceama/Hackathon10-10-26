@@ -1,0 +1,181 @@
+:root {
+  --supports: #2b7a4b;
+  --supports-bg: rgba(43, 122, 75, 0.12);
+  --contradicts: #c0392b;
+  --contradicts-bg: rgba(192, 57, 43, 0.12);
+  --warn: #c77c00;
+  --warn-bg: rgba(199, 124, 0, 0.14);
+  --text: #1f2328;
+  --muted: #6b7280;
+  --brand: #111111;
+  --line: #e5e7eb;
+  --page: #ffffff;
+  --background: #f6f7f9;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", sans-serif;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 24px;
+  background: var(--page);
+  border-bottom: 1px solid var(--line);
+}
+
+.brand { font-weight: 700; font-size: 18px; }
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: white;
+}
+.banner.off { background: #eee; color: var(--muted); }
+.banner button {
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  background: white;
+  color: var(--brand);
+}
+
+main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 24px;
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: 0 24px;
+}
+
+.page {
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 32px 40px;
+}
+
+#title {
+  width: 100%;
+  border: 0;
+  outline: none;
+  font: 600 24px Georgia, serif;
+  margin-bottom: 16px;
+}
+
+/* The textarea sits on top of a backdrop that draws the highlights. Both must share
+   exactly the same font, padding and wrapping so the highlights line up. */
+.writing { position: relative; }
+
+#backdrop, #editor {
+  font: 18px/1.7 Georgia, serif;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  letter-spacing: normal;
+}
+
+#backdrop {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: transparent;
+  pointer-events: none;
+}
+
+#editor {
+  position: relative;
+  display: block;
+  min-height: 60vh;
+  resize: none;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  overflow: hidden; /* grows with its content instead, so its width matches the backdrop */
+}
+
+mark {
+  color: transparent;
+  border-radius: 3px;
+  transition: background 0.15s;
+}
+mark.pending { background: none; border-bottom: 2px dotted #c4c8cf; }
+mark.supports { background: none; border-bottom: 2px solid var(--supports); }
+mark.contradicts { background: var(--contradicts-bg); border-bottom: 2px solid var(--contradicts); }
+mark.misquote, mark.warn { background: var(--warn-bg); border-bottom: 2px solid var(--warn); }
+mark.active.supports { background: var(--supports-bg); }
+mark.active.contradicts { background: rgba(192, 57, 43, 0.25); }
+mark.active.misquote, mark.active.warn { background: rgba(199, 124, 0, 0.28); }
+
+#summary {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--muted);
+}
+
+aside h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 4px 0 12px; }
+.hint { font-size: 13px; color: var(--muted); }
+
+.card {
+  position: relative;
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--supports);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  transition: box-shadow 0.15s;
+}
+.card:hover { box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08); }
+.card.contradicts { border-left-color: var(--contradicts); }
+.card.misquote { border-left-color: var(--warn); }
+
+.card .label { font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--supports); }
+.card.contradicts .label { color: var(--contradicts); }
+.card.misquote .label { color: var(--warn); }
+
+.card .sentence { color: var(--muted); font-style: italic; margin: 4px 0 8px; }
+.card .quote { margin: 0 0 8px; padding-left: 8px; border-left: 2px solid var(--line); }
+.card .source a { color: var(--brand); text-decoration: none; font-weight: 600; }
+.card .source a:hover { text-decoration: underline; }
+.card .warning { margin-top: 8px; padding: 6px 8px; border-radius: 6px; background: var(--warn-bg); color: #8a5600; }
+
+.card .dismiss {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 16px;
+  cursor: pointer;
+  line-height: 1;
+}
+.card .dismiss:hover { color: var(--text); }
+
+@media (max-width: 800px) {
+  main { grid-template-columns: 1fr; padding: 0 16px; }
+  .page { padding: 20px; }
+}
