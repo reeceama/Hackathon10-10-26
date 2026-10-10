@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+trafilatura
+sentence-transformers
+numpy
+anthropic
+python-dotenv
