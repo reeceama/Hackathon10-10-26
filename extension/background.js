@@ -109,20 +109,45 @@ async function capturing() {
   }
 }
 
+// YouTube videos are captured from their transcript; the page itself stays on the skip list.
+const YOUTUBE_VIDEO = /^https:\/\/(www\.|m\.)?youtube\.com\/(watch\?|shorts\/)|^https:\/\/youtu\.be\//;
+
 function watchPdf(tab) {
-  if (!tab.url || !PDF_URL.test(tab.url) || pdfsSent.has(tab.url) || isSkipped(tab.url)) return;
+  const isPdf = tab.url && PDF_URL.test(tab.url) && !isSkipped(tab.url);
+  const isVideo = tab.url && YOUTUBE_VIDEO.test(tab.url);
+  if ((!isPdf && !isVideo) || pdfsSent.has(tab.url)) return;
   clearTimeout(pdfTimers.get(tab.id));
   pdfTimers.set(tab.id, setTimeout(async () => {
     pdfTimers.delete(tab.id);
     const current = await chrome.tabs.get(tab.id).catch(() => null);
-    // Only if the same PDF is still the tab being looked at.
-    if (current?.active && current.url === tab.url) capturePdf(current.url, current.title);
+    // Only if the same PDF or video is still the tab being looked at.
+    if (!current?.active || current.url !== tab.url) return;
+    if (isPdf) capturePdf(current.url, current.title);
+    else captureVideo(current.url, current.title);
   }, READ_MS));
 }
 
 chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
-  if (change.status === "complete") watchPdf(tab);
+  // YouTube changes video without reloading the page, so a new URL counts too.
+  if (change.status === "complete" || change.url) watchPdf(tab);
 });
+
+async function captureVideo(url, title) {
+  if (!(await capturing())) return;
+  pdfsSent.add(url);
+  const { project = "" } = await chrome.storage.local.get("project");
+  let entry = { url, title: (title || url).replace(/ - YouTube$/, ""), at: Date.now(), project: project || null };
+  try {
+    const result = await post("capture-video", { url, project });
+    if (result.ok && result.already_captured) entry.status = "already";
+    else if (result.ok) entry = { ...entry, status: "saved", passages: result.passages };
+    else entry = { ...entry, status: "skipped", reason: result.reason };
+  } catch {
+    entry = { ...entry, status: "offline", reason: "the Referee server isn't running" };
+  }
+  console.log("[Referee] video capture:", entry);
+  await logCapture(entry);
+}
 chrome.tabs.onActivated.addListener(({ tabId }) => {
   chrome.tabs.get(tabId).then(watchPdf).catch(() => {});
 });

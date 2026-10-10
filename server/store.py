@@ -21,10 +21,12 @@ CANDIDATES = 20  # how many passages each search method puts forward before comb
 RRF_K = 60       # reciprocal rank fusion constant (the usual default)
 
 
-def add_page(metadata: Dict, passages: List[str], pages: Optional[List[int]] = None) -> int:
+def add_page(metadata: Dict, passages: List[str], pages: Optional[List[int]] = None,
+             times: Optional[List[int]] = None) -> int:
     """Store a page's passages. Returns how many were added (0 if already captured).
 
     pages: for PDFs, the page each passage starts on, so citations can give page numbers.
+    times: for videos, the second each passage starts at, so citations can give timestamps.
     """
     global _vectors
     url = metadata.get("url")
@@ -37,6 +39,8 @@ def add_page(metadata: Dict, passages: List[str], pages: Optional[List[int]] = N
             passage = {"text": text, "source": metadata}
             if pages:
                 passage["page"] = pages[i]
+            if times:
+                passage["time"] = times[i]
             _passages.append(passage)
         _keywords.add(passages)
         _vectors = new_vectors if _vectors is None else np.vstack([_vectors, new_vectors])

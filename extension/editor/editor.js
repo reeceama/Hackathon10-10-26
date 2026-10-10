@@ -39,7 +39,7 @@ function sourceNumbers(matched) {
 }
 
 function citationFor(match, numbers) {
-  return style().inText(match.source, { number: numbers.get(sourceKey(match.source)), page: match.page });
+  return style().inText(match.source, { number: numbers.get(sourceKey(match.source)), page: match.page, time: match.time });
 }
 let pauseTimer;
 
@@ -179,6 +179,12 @@ function renderReferences(matched, numbers) {
     entries.join("\n"), `${entries.length} reference${entries.length === 1 ? "" : "s"} copied`);
 }
 
+// Videos open at the moment the passage starts; pages scroll to the quoted passage.
+function sourceLink(source, match) {
+  if (source.type === "video" && match.time != null) return `${source.url}&t=${match.time}s`;
+  return textFragmentUrl(source.url, match.quote);
+}
+
 // A link that opens the source scrolled to, and highlighting, the quoted passage (Chrome).
 function textFragmentUrl(url, quote) {
   if (!quote) return url;
@@ -216,7 +222,8 @@ function renderCards(matched, items, numbers) {
       continue;
     }
     const source = match.source || {};
-    const year = (source.date ? ` · ${String(source.date).slice(0, 4)}` : "") + (match.page ? ` · p. ${match.page}` : "");
+    const year = (source.date ? ` · ${String(source.date).slice(0, 4)}` : "") + (match.page ? ` · p. ${match.page}` : "") +
+      (match.time != null ? ` · ${Cite.timestamp(match.time)}` : "");
 
     const warnings = [];
     if (match.misquote && match.label !== "misquote") warnings.push("This quotation doesn't match the source exactly.");
@@ -233,7 +240,7 @@ function renderCards(matched, items, numbers) {
       ${warnings.map((w) => `<div class="warning">${escapeHtml(w)}</div>`).join("")}
       <div class="actions">
         ${match.label === "supports" ? `<button class="copy-citation">Copy ${escapeHtml(citationFor(match, numbers))}</button>` : ""}
-        ${source.url ? `<a class="open-source" href="${escapeHtml(textFragmentUrl(source.url, match.quote))}" target="_blank" rel="noopener">Open source</a>` : ""}
+        ${source.url ? `<a class="open-source" href="${escapeHtml(sourceLink(source, match))}" target="_blank" rel="noopener">Open source</a>` : ""}
       </div>
     `;
 

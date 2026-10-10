@@ -12,6 +12,7 @@ import base64
 
 from extract import extract_page
 from pdf import extract_pdf
+from video import extract_video
 from store import add_page, clear, forget, search, sources
 from verify import verify
 from claims import needs_source
@@ -94,6 +95,11 @@ class CapturePdfRequest(BaseModel):
     data: str  # the PDF file, base64-encoded
 
 
+class CaptureVideoRequest(BaseModel):
+    url: str
+    project: str = ""
+
+
 class CaptureUrlRequest(BaseModel):
     url: str
 
@@ -137,6 +143,20 @@ def capture_pdf(req: CapturePdfRequest):
     metadata["captured_at"] = date.today().isoformat()  # APA access date
     metadata["project"] = req.project or None
     added = add_page(metadata, [text for text, _ in passages], pages=[page for _, page in passages])
+    if added == 0:
+        return {"ok": True, "passages": 0, "already_captured": True}
+    return {"ok": True, "passages": added}
+
+
+@app.post("/capture-video")
+def capture_video(req: CaptureVideoRequest):
+    try:
+        metadata, passages = extract_video(req.url)
+    except ValueError as e:
+        return {"ok": False, "reason": str(e)}
+    metadata["captured_at"] = date.today().isoformat()  # APA access date
+    metadata["project"] = req.project or None
+    added = add_page(metadata, [text for text, _ in passages], times=[time for _, time in passages])
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
     return {"ok": True, "passages": added}

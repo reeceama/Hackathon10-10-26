@@ -93,15 +93,27 @@ const Cite = (() => {
 
   const pageNote = (page, prefix = "p.") => (page ? `, ${prefix} ${page}` : "");
 
+  // Seconds -> "5:26" or "1:02:05", as a video timestamp.
+  function timestamp(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = String(Math.floor(seconds % 60)).padStart(2, "0");
+    return h ? `${h}:${String(m).padStart(2, "0")}:${s}` : `${m}:${s}`;
+  }
+
+  // Where in the source: a page for PDFs, a timestamp for videos.
+  const locator = ({ page, time } = {}) => (page ? `, p. ${page}` : time != null ? `, ${timestamp(time)}` : "");
+  const isVideo = (source) => source.type === "video";
+
   const STYLES = {
     apa: {
       name: "APA 7",
       numbered: false,
-      inText(source, { page } = {}) {
+      inText(source, where = {}) {
         const d = parseDate(source.date);
         const who = surnames(source) || `“${shortTitle(source)},”`;
         const year = d ? d.year : "n.d.";
-        return who.endsWith(",”") ? `(${who} ${year}${pageNote(page)})` : `(${who}, ${year}${pageNote(page)})`;
+        return who.endsWith(",”") ? `(${who} ${year}${locator(where)})` : `(${who}, ${year}${locator(where)})`;
       },
       // Author. (Year, Month Day). Title. Site. URL
       reference(source) {
@@ -112,6 +124,8 @@ const Cite = (() => {
         if (d) date = `(${d.year}${d.month ? `, ${MONTHS[d.month - 1]}` : ""}${d.month && d.day ? ` ${d.day}` : ""})`;
         const where = site(source) ? ` ${endStop(site(source))}` : "";
         const url = source.url ? ` ${source.url}` : "";
+        // Videos: Channel. (Date). Title [Video]. YouTube. URL
+        if (isVideo(source)) return `${names.length ? listAuthors(names, " ", ", & ") : site(source)}. ${date}. ${title} [Video]. YouTube.${url}`;
         if (names.length) return `${listAuthors(names, " ", ", & ")} ${date}. ${endStop(title)}${where}${url}`;
         return `${endStop(title)} ${date}.${where}${url}`;
       },
@@ -120,10 +134,10 @@ const Cite = (() => {
     harvard: {
       name: "Harvard",
       numbered: false,
-      inText(source, { page } = {}) {
+      inText(source, where = {}) {
         const d = parseDate(source.date);
         const who = (surnames(source) || site(source) || shortTitle(source)).replace(" & ", " and ");
-        return `(${who}, ${d ? d.year : "no date"}${pageNote(page)})`;
+        return `(${who}, ${d ? d.year : "no date"}${locator(where)})`;
       },
       // Author (Year) Title. Available at: URL (Accessed: Day Month Year).
       reference(source) {
@@ -131,7 +145,8 @@ const Cite = (() => {
         const who = names.length ? listAuthors(names, "", " and ") : site(source) || cleanTitle(source);
         const d = parseDate(source.date);
         const a = accessed(source);
-        return `${who} (${d ? d.year : "no date"}) ${endStop(cleanTitle(source))} ` +
+        const video = isVideo(source) ? " [Video]" : "";
+        return `${who} (${d ? d.year : "no date"}) ${endStop(cleanTitle(source) + video)} ` +
           `Available at: ${source.url} (Accessed: ${a.day} ${MONTHS[a.month - 1]} ${a.year}).`;
       },
     },
@@ -139,8 +154,8 @@ const Cite = (() => {
     ieee: {
       name: "IEEE",
       numbered: true,
-      inText(source, { number, page } = {}) {
-        return `[${number}${pageNote(page)}]`;
+      inText(source, where = {}) {
+        return `[${where.number}${locator(where)}]`;
       },
       // [n] J. Smith, "Title," Site, Year. [Online]. Available: URL (Accessed: Mon. Day, Year).
       reference(source, { number } = {}) {
@@ -150,7 +165,7 @@ const Cite = (() => {
         const a = accessed(source);
         const rest = [site(source), d ? d.year : null].filter(Boolean).join(", ");
         const parts = rest ? endStop(`“${cleanTitle(source)},” ${rest}`) : `“${endStop(cleanTitle(source))}”`;
-        return `[${number}] ${who}${parts} [Online]. Available: ${source.url} ` +
+        return `[${number}] ${who}${parts} [Online${isVideo(source) ? " Video" : ""}]. Available: ${source.url} ` +
           `(Accessed: ${SHORT_MONTHS[a.month - 1]} ${a.day}, ${a.year}).`;
       },
     },
@@ -158,8 +173,8 @@ const Cite = (() => {
     ams: {
       name: "AMS (mathematics)",
       numbered: true,
-      inText(source, { number, page } = {}) {
-        return `[${number}${pageNote(page)}]`;
+      inText(source, where = {}) {
+        return `[${where.number}${locator(where)}]`;
       },
       // [n] J. Smith, Title, Site, Year. Available at URL (accessed Day Month Year).
       reference(source, { number } = {}) {
@@ -167,7 +182,7 @@ const Cite = (() => {
         const who = names.length ? `${initialsFirst(names)}, ` : "";
         const d = parseDate(source.date);
         const a = accessed(source);
-        const parts = [cleanTitle(source), site(source), d ? d.year : null].filter(Boolean).join(", ");
+        const parts = [cleanTitle(source) + (isVideo(source) ? " (video)" : ""), site(source), d ? d.year : null].filter(Boolean).join(", ");
         return `[${number}] ${who}${endStop(parts)} Available at ${source.url} ` +
           `(accessed ${a.day} ${MONTHS[a.month - 1]} ${a.year}).`;
       },
@@ -185,5 +200,5 @@ const Cite = (() => {
     return styleName === "ieee" ? null : cleanTitle(source);
   }
 
-  return { STYLES, sortKey, cleanTitle, italicPart };
+  return { STYLES, sortKey, cleanTitle, italicPart, timestamp };
 })();

@@ -212,6 +212,7 @@ def misquote_marker(sentence, candidates):
             "label": "misquote",
             "score": best.get("score"),
             "page": best.get("page"),
+            "time": best.get("time"),
             "misquote": True,
             "too_close": False,
         }
@@ -268,6 +269,7 @@ def _verified(sentence, candidates, threshold, use_cache=True):
         "label": label,
         "score": chosen.get("score"),
         "page": chosen.get("page"),  # PDFs only: the page the passage starts on
+        "time": chosen.get("time"),  # videos only: the second the passage starts at
         **check_wording(
             sentence,
             chosen["text"],
