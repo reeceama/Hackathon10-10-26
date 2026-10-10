@@ -8,7 +8,7 @@ load_dotenv()
 client = anthropic.Anthropic()
 
 MODEL = "claude-haiku-5-5"
-THRESHOLD = 0.8
+THRESHOLD = 0.6  # chosen from the SciFact evaluation: precision 0.95, recall 0.77
 
 SYSTEM_PROMPT = """You check whether a sentence from a student's essay is backed by sources they have read.
 
