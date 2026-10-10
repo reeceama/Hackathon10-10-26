@@ -7,6 +7,7 @@ from pydantic import BaseModel
 
 from extract import extract_page
 from store import add_page, clear, search
+from verify import verify
 
 # Minimum similarity score before a match is considered at all.
 # Set this from the scores you recorded in test_store.py.
@@ -55,16 +56,10 @@ def check(req: CheckRequest):
     if not results or results[0]["score"] < MIN_SCORE:
         return {"match": False}
 
-    # TEMPORARY: return the top search result unverified.
-    # verify.py will replace this with Claude's decision + exact quote.
-    best = results[0]
-    return {
-        "match": True,
-        "source": best["source"],
-        "passage": best["text"],
-        "quote": None,
-        "score": best["score"],
-    }
+    match = verify(sentence, results)
+    if match is None:
+        return {"match": False}
+    return {"match": True, **match}
 
 
 @app.post("/clear")
