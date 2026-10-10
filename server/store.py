@@ -54,6 +54,8 @@ def clear() -> None:
 
 
 def _save() -> None:
+    if _vectors is None:
+        return
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(_passages, f)
     np.save(VECTOR_FILE, _vectors)
