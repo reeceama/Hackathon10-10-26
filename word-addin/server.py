@@ -46,7 +46,7 @@ async def proxy(path: str, request: Request):
             request.method,
             f"{BACKEND}/{path}",
             content=await request.body(),
-            headers={"Content-Type": request.headers.get("content-type", "application/json")},
+            headers={"Content-Type": request.headers.get("content-type", "application/json"), "X-Referee": "1"},
         )
     return Response(response.content, response.status_code, media_type=response.headers.get("content-type"))
 

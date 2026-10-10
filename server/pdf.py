@@ -1,0 +1,89 @@
+"""Passages from PDFs, such as academic papers, with the page each passage starts on.
+
+PDF text comes out line by line, with words hyphenated across line breaks and the
+reference list at the end, so it needs more cleaning than a web page.
+"""
+
+import io
+import re
+from typing import Dict, List, Optional, Tuple
+
+from pypdf import PdfReader
+
+from extract import MIN_SENTENCE_WORDS, SENTENCE_SPLIT
+
+PASSAGE_SIZE = 3  # sentences per passage, overlapping by one (as for web pages)
+REFERENCES = re.compile(r"^\s*(references|bibliography|works cited|literature cited)\s*$", re.IGNORECASE | re.MULTILINE)
+CITATION_MARKERS = re.compile(r"\s*\[\d+(?:[,–-]\s*\d+)*\]")  # [3], [3, 7], [3-5]
+
+
+def clean_page(text: str) -> str:
+
+    """
+    Join a page's lines into running text.
+    """
+
+    text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)  # re-join words hyphenated over a line break
+    text = CITATION_MARKERS.sub("", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def pdf_date(raw: Optional[str]) -> Optional[str]:
+
+    """
+    PDF dates look like D:20230514120000; return 2023-05-14.
+    """
+
+    match = re.match(r"D?:?(\d{4})(\d{2})?(\d{2})?", raw or "")
+    if not match:
+        return None
+    return "-".join(part for part in match.groups() if part)
+
+
+def extract_pdf(data: bytes, url: Optional[str] = None) -> Tuple[Dict, List[Tuple[str, int]]]:
+
+    """
+    Return metadata and a list of (passage, page number) from a PDF.
+    """
+
+    try:
+        reader = PdfReader(io.BytesIO(data))
+    except Exception as error:
+        raise ValueError(f"Not a readable PDF: {error}")
+
+    info = reader.metadata or {}
+    metadata = {
+        "title": (info.get("/Title") or "").strip() or None,
+        "author": (info.get("/Author") or "").strip() or None,
+        "date": pdf_date(info.get("/CreationDate")),
+        "site": None,
+        "url": url,
+        "type": "pdf",
+    }
+
+    # Sentences tagged with their page, stopping at the reference list.
+    sentences: List[Tuple[str, int]] = []
+    for number, page in enumerate(reader.pages, start=1):
+        raw = page.extract_text() or ""
+        heading = REFERENCES.search(raw)
+        if heading and number > 1:
+            raw = raw[: heading.start()]
+        for sentence in SENTENCE_SPLIT.split(clean_page(raw)):
+            if len(sentence.split()) >= MIN_SENTENCE_WORDS:
+                sentences.append((sentence.strip(), number))
+        if heading and number > 1:
+            break
+
+    if not sentences:
+        raise ValueError("No readable text in this PDF (it may be a scanned image).")
+    if not metadata["title"]:
+        metadata["title"] = sentences[0][0][:120]  # first line is usually the title
+
+    passages = []
+    step = PASSAGE_SIZE - 1
+    for start in range(0, len(sentences), step):
+        group = sentences[start : start + PASSAGE_SIZE]
+        passages.append((" ".join(text for text, _ in group), group[0][1]))
+        if start + PASSAGE_SIZE >= len(sentences):
+            break
+    return metadata, passages

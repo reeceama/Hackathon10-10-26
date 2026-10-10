@@ -168,6 +168,7 @@ def misquote_marker(sentence, candidates):
             "confidence": 1.0,
             "label": "misquote",
             "score": best.get("score"),
+            "page": best.get("page"),
             "misquote": True,
             "too_close": False,
         }
@@ -223,6 +224,7 @@ def _verified(sentence, candidates, threshold):
         "confidence": confidence,
         "label": label,
         "score": chosen.get("score"),
+        "page": chosen.get("page"),  # PDFs only: the page the passage starts on
         **check_wording(
             sentence,
             chosen["text"],

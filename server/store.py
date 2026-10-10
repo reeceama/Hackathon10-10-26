@@ -16,8 +16,11 @@ _seen_urls = set()
 _lock = threading.Lock()
 
 
-def add_page(metadata: Dict, passages: List[str]) -> int:
-    """Store a page's passages. Returns how many were added (0 if already captured)."""
+def add_page(metadata: Dict, passages: List[str], pages: Optional[List[int]] = None) -> int:
+    """Store a page's passages. Returns how many were added (0 if already captured).
+
+    pages: for PDFs, the page each passage starts on, so citations can give page numbers.
+    """
     global _vectors
     url = metadata.get("url")
     if url in _seen_urls:
@@ -25,7 +28,11 @@ def add_page(metadata: Dict, passages: List[str]) -> int:
 
     new_vectors = embed(passages)
     with _lock:
-        _passages.extend({"text": p, "source": metadata} for p in passages)
+        for i, text in enumerate(passages):
+            passage = {"text": text, "source": metadata}
+            if pages:
+                passage["page"] = pages[i]
+            _passages.append(passage)
         _vectors = new_vectors if _vectors is None else np.vstack([_vectors, new_vectors])
         _seen_urls.add(url)
         _save()
