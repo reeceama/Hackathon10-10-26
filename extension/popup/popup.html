@@ -29,6 +29,14 @@
       #saved-list .s { color: #888; font-size: 11px; }
       #saved-list .s[data-status="saved"] { color: #2b7a4b; }
       #saved-list .s[data-status="offline"], #saved-list .s[data-status="skipped"] { color: #c0392b; }
+      #project { width: 120px; font-size: 13px; padding: 2px 6px; border: 1px solid #ccc; border-radius: 4px; }
+      #search { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 6px; }
+      #saved-list li { position: relative; padding-right: 18px; }
+      #saved-list .forget-one { position: absolute; right: 0; top: 6px; width: auto; padding: 0 2px; background: none; color: #aaa; font-size: 14px; }
+      #saved-list .forget-one:hover { color: #c0392b; }
+      .tags { display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
+      .tag { font-size: 10px; padding: 0 5px; border-radius: 3px; background: #f0f0f0; color: #555; }
+      .tag.cited { background: #e7f3ec; color: #2b7a4b; }
       .hint { font-size: 11px; color: #888; margin: -4px 0 10px; }
       .empty { font-size: 12px; color: #888; margin: 0 0 12px; }
     </style>
@@ -59,10 +67,25 @@
         <option value="manual">Manually only</option>
       </select>
     </div>
+    <div class="row">
+      <span>Project</span>
+      <input id="project" list="projects" placeholder="Any" />
+      <datalist id="projects"></datalist>
+    </div>
+    <div class="row">
+      <span>Forget reading after</span>
+      <select id="expiry">
+        <option value="0">Never</option>
+        <option value="7">7 days</option>
+        <option value="14">14 days</option>
+        <option value="30">30 days</option>
+      </select>
+    </div>
     <p class="hint" id="mode-hint">Captures what you read only while you're writing in Word, Obsidian or the Referee editor.</p>
     <div id="status"></div>
 
     <h2 id="saved-title">Saved pages</h2>
+    <input id="search" type="search" placeholder="Search your reading" />
     <ol id="saved-list"></ol>
     <p class="empty" id="saved-empty">Pages you spend time on, or highlight text in, while research mode is on are saved here.</p>
 

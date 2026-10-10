@@ -19,6 +19,7 @@ const title = document.getElementById("title");
 const checks = new Map(); // sentence -> { state: "pending" | "done", match }
 const dismissed = new Set();
 let citationStyle = "apa"; // apa | harvard | ieee | ams, saved in the browser
+let currentProject = "";   // set in the extension popup; checks use only that project's reading
 
 function style() {
   return Cite.STYLES[citationStyle] || Cite.STYLES.apa;
@@ -69,7 +70,7 @@ async function checkNewSentences() {
   for (const sentence of finishedSentences(editor.value)) {
     if (checks.has(sentence)) continue;
     checks.set(sentence, { state: "pending" });
-    api("check", { sentence })
+    api("check", { sentence, project: currentProject })
       .then((result) => {
         if (!result || result.error) throw new Error(result?.error || "No reply from the server");
         checks.set(sentence, {
@@ -145,6 +146,15 @@ function render() {
   renderCards(items.filter((item) => item.entry.state === "done"), items, numbers);
   renderSummary(matched, unsourced);
   renderReferences(matched, numbers);
+  recordCited(matched);
+}
+
+// Tells the popup which saved pages are cited in this piece of writing.
+function recordCited(matched) {
+  if (!IN_EXTENSION) return;
+  const urls = [...new Set(matched.filter((item) => item.entry.match.label === "supports")
+    .map((item) => item.entry.match.source?.url).filter(Boolean))];
+  chrome.storage.local.set({ cited: urls }).catch(() => {});
 }
 
 // Reference list for every source that supports a sentence: alphabetical for author-date
@@ -370,10 +380,14 @@ bannerButton.addEventListener("click", async () => {
 
 if (IN_EXTENSION) chrome.storage.onChanged.addListener(showResearch);
 
-// Newly captured reading can make a sentence citable that had no source before.
+// Newly captured reading (or a different project) can change what a sentence can cite.
 if (IN_EXTENSION) {
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== "local" || !changes.captures) return;
+    if (area !== "local" || !(changes.captures || changes.project)) return;
+    if (changes.project) {
+      currentProject = changes.project.newValue || "";
+      checks.clear(); // every verdict depended on the old project's reading
+    }
     for (const [sentence, entry] of checks) if (entry.state === "done" && !entry.match) checks.delete(sentence);
     checkNewSentences();
   });
@@ -448,6 +462,7 @@ styleMenu.addEventListener("change", () => {
 
 (async () => {
   try { citationStyle = localStorage.getItem("referee-style") || "apa"; } catch {}
+  if (IN_EXTENSION) currentProject = (await chrome.storage.local.get("project")).project || "";
   styleMenu.value = citationStyle;
   loadDraft();
   showResearch();

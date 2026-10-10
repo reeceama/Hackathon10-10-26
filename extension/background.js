@@ -18,6 +18,14 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     capture(message.body).then(reply);
     return true;
   }
+  if (message.type === "forget") {
+    forgetOne(message.url).then(reply);
+    return true;
+  }
+  if (message.type === "expire") {
+    expireOldReading().then(reply);
+    return true;
+  }
   if (message.type === "clear") {
     forgetEverything().then(reply);
     return true;
@@ -54,9 +62,10 @@ async function post(route, body) {
 
 // Sends a page to the backend and records what happened, for the popup's saved pages list.
 async function capture({ url, title, html }) {
-  let entry = { url, title: title || url, at: Date.now() };
+  const { project = "" } = await chrome.storage.local.get("project");
+  let entry = { url, title: title || url, at: Date.now(), project: project || null };
   try {
-    const result = await post("capture", { url, html });
+    const result = await post("capture", { url, html, project });
     if (result.ok && result.already_captured) entry.status = "already";
     else if (result.ok) entry = { ...entry, status: "saved", passages: result.passages };
     else entry = { ...entry, status: "skipped", reason: result.reason };
@@ -134,14 +143,15 @@ function toBase64(buffer) {
 async function capturePdf(url, title) {
   if (!(await capturing())) return;
   pdfsSent.add(url);
-  let entry = { url, title: title || url, at: Date.now() };
+  const { project = "" } = await chrome.storage.local.get("project");
+  let entry = { url, title: title || url, at: Date.now(), project: project || null };
   try {
     const response = await fetch(url, { credentials: "include" });
     const type = response.headers.get("content-type") || "";
     if (!url.startsWith("file:") && !type.includes("pdf")) throw new Error("not a PDF");
     const data = await response.arrayBuffer();
     if (data.byteLength > MAX_PDF_BYTES) throw new Error("PDF is larger than 25 MB");
-    const result = await post("capture-pdf", { url, title: title || "", data: toBase64(data) });
+    const result = await post("capture-pdf", { url, title: title || "", project, data: toBase64(data) });
     if (result.ok && result.already_captured) entry.status = "already";
     else if (result.ok) entry = { ...entry, status: "saved", passages: result.passages };
     else entry = { ...entry, status: "skipped", reason: result.reason };
@@ -152,6 +162,32 @@ async function capturePdf(url, title) {
   console.log("[Referee] PDF capture:", entry);
   await logCapture(entry);
 }
+
+// Forget one page or PDF, on the server and in the saved pages list.
+async function forgetOne(url) {
+  try {
+    await fetch(`${SERVER}/sources?url=${encodeURIComponent(url)}`, { method: "DELETE", headers: HEADERS });
+  } catch {
+    // Server down: the list still drops it; the server copy goes next time it's forgotten.
+  }
+  const { captures = [] } = await chrome.storage.local.get("captures");
+  await chrome.storage.local.set({ captures: captures.filter((c) => c.url !== url) });
+  pdfsSent.delete(url);
+  return { ok: true };
+}
+
+// Reading older than the chosen number of days is forgotten automatically (checked daily).
+async function expireOldReading() {
+  const { expiryDays = "0", captures = [] } = await chrome.storage.local.get(["expiryDays", "captures"]);
+  const days = Number(expiryDays);
+  if (!days) return { ok: true, forgotten: 0 };
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const old = captures.filter((c) => c.at < cutoff);
+  for (const c of old) await forgetOne(c.url);
+  return { ok: true, forgotten: old.length };
+}
+
+chrome.alarms.create("expire-reading", { periodInMinutes: 24 * 60 });
 
 // Forget everything captured, on the server and in the saved pages list.
 async function forgetEverything() {
@@ -174,6 +210,7 @@ async function setResearch(on, minutes) {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "research-off") setResearch(false);
+  if (alarm.name === "expire-reading") expireOldReading();
 });
 
 // While research mode is on, the badge shows how many pages have been saved.
@@ -188,4 +225,5 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && (changes.research || changes.captures)) updateBadge();
 });
 chrome.runtime.onStartup.addListener(updateBadge);
+chrome.runtime.onStartup.addListener(expireOldReading);
 chrome.runtime.onInstalled.addListener(updateBadge);

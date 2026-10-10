@@ -12,7 +12,7 @@ import base64
 
 from extract import extract_page
 from pdf import extract_pdf
-from store import add_page, clear, search
+from store import add_page, clear, forget, search, sources
 from verify import verify
 from claims import needs_source
 from feedback import FeedbackModel
@@ -79,14 +79,17 @@ async def referee_only(request: Request, call_next):
 class CaptureRequest(BaseModel):
     url: str
     html: str
+    project: str = ""  # reading is kept per project; empty means any
  
  
 class CheckRequest(BaseModel):
     sentence: str
+    project: str = ""  # only check against this project's reading
  
  
 class CapturePdfRequest(BaseModel):
     url: str
+    project: str = ""
     title: str = ""
     data: str  # the PDF file, base64-encoded
 
@@ -116,6 +119,7 @@ def capture(req: CaptureRequest):
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
     metadata["captured_at"] = date.today().isoformat()  # APA access date
+    metadata["project"] = req.project or None
     added = add_page(metadata, passages)
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
@@ -131,6 +135,7 @@ def capture_pdf(req: CapturePdfRequest):
     if req.title and not metadata.get("title"):
         metadata["title"] = req.title
     metadata["captured_at"] = date.today().isoformat()  # APA access date
+    metadata["project"] = req.project or None
     added = add_page(metadata, [text for text, _ in passages], pages=[page for _, page in passages])
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
@@ -146,7 +151,7 @@ def check(req: CheckRequest):
     # No supporting reading: say whether the sentence reads like a claim that needs one.
     unsupported = {"match": False, "needs_source": needs_source(sentence)}
 
-    results = search(sentence, k=5)  # 3 missed the best passage in testing
+    results = search(sentence, k=5, project=req.project or None)  # 3 missed the best passage in testing
     candidates = [r for r in results if r["score"] >= MIN_SCORE]
     if not candidates:
         return unsupported
@@ -185,6 +190,16 @@ def writing_ping():
 @app.get("/writing")
 def writing_status():
     return {"active": writing.active()}
+
+
+@app.get("/sources")
+def list_sources():
+    return sources()
+
+
+@app.delete("/sources")
+def forget_source(url: str):
+    return {"ok": True, "removed": forget(url)}
 
 
 @app.post("/clear")
