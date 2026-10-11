@@ -40,6 +40,24 @@ def parts():
     return found
 
 
+def windows_job():
+
+    """
+    On Windows, a job object that ends every part when this launcher ends, however it ends:
+    Windows stops programs without warning, so the launcher can't always stop them itself.
+    """
+
+    import win32api
+    import win32job
+
+    job = win32job.CreateJobObject(None, "")
+    limits = win32job.QueryInformationJobObject(job, win32job.JobObjectExtendedLimitInformation)
+    limits["BasicLimitInformation"]["LimitFlags"] |= win32job.JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+    win32job.SetInformationJobObject(job, win32job.JobObjectExtendedLimitInformation, limits)
+    win32job.AssignProcessToJobObject(job, win32api.GetCurrentProcess())  # parts inherit it
+    return job
+
+
 class Launcher:
 
     def __init__(self):
@@ -48,10 +66,11 @@ class Launcher:
         self.logs.mkdir(parents=True, exist_ok=True)
         self.running = {}   # name -> Popen
         self.stopping = False
+        self.job = windows_job() if sys.platform == "win32" else None
 
     def start(self, name, folder, arguments):
 
-        log = open(self.logs / f"{name}.log", "a", buffering=1)
+        log = open(self.logs / f"{name}.log", "a", buffering=1, encoding="utf-8")
         # No console windows on Windows; the parts run quietly in the background.
         flags = subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
         self.running[name] = subprocess.Popen([sys.executable, *arguments], cwd=REPO / folder,

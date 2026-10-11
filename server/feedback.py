@@ -86,7 +86,7 @@ class FeedbackModel:
     def __init__(self, path):
 
         self.path = Path(path)
-        self.events = json.loads(self.path.read_text()) if self.path.exists() else []
+        self.events = json.loads(self.path.read_text(encoding="utf-8")) if self.path.exists() else []
         self.model = None
         self._fit()
 
@@ -113,7 +113,7 @@ class FeedbackModel:
         if event.get("event") not in EVENTS:
             return False
         self.events.append(event)
-        self.path.write_text(json.dumps(self.events))
+        self.path.write_text(json.dumps(self.events), encoding="utf-8")
         self._fit()
         return True
 

@@ -46,12 +46,12 @@ class Settings:
         self.path = HOME / "config.json"
         if not self.path.exists():
             HOME.mkdir(exist_ok=True)
-            self.path.write_text(json.dumps({"style": "apa"}, indent=2))
+            self.path.write_text(json.dumps({"style": "apa"}, indent=2), encoding="utf-8")
 
     def load(self) -> Dict:
 
         try:
-            settings = json.loads(self.path.read_text())
+            settings = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             settings = {}
         style = settings.get("style", "apa")
@@ -70,7 +70,7 @@ class DocumentState:
 
         self.path = HOME / "word-helper.json"
         try:
-            self.documents: Dict[str, Dict] = json.loads(self.path.read_text())
+            self.documents: Dict[str, Dict] = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             self.documents = {}
 
@@ -86,7 +86,7 @@ class DocumentState:
     def save(self) -> None:
 
         HOME.mkdir(exist_ok=True)
-        self.path.write_text(json.dumps(self.documents))
+        self.path.write_text(json.dumps(self.documents), encoding="utf-8")
 
 
 def writing_part(text: str) -> str:

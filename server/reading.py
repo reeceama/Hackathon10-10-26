@@ -18,7 +18,7 @@ class ReadingSettings:
 
         self.path = path
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             data = {}
         self.project: str = data.get("project", "")
@@ -47,7 +47,7 @@ class ReadingSettings:
             if name:
                 links[name] = [new if o == old else o for o in others if new or o != old]
         self.links = links
-        self.path.write_text(json.dumps(self.as_dict()))
+        self.path.write_text(json.dumps(self.as_dict()), encoding="utf-8")
         return self.as_dict()
 
     def allowed(self, project: str):
@@ -73,5 +73,5 @@ class ReadingSettings:
             self.links = {p: [o for o in others if o != p] for p, others in changes["links"].items()}
         if changes.get("keep_minutes"):
             self.keep_minutes = int(changes["keep_minutes"])
-        self.path.write_text(json.dumps(self.as_dict()))
+        self.path.write_text(json.dumps(self.as_dict()), encoding="utf-8")
         return self.as_dict()

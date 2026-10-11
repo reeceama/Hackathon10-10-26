@@ -21,13 +21,13 @@ class ClaimLog:
 
         self.path = path
         try:
-            self.entries: Dict[str, Dict] = json.loads(path.read_text())
+            self.entries: Dict[str, Dict] = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             self.entries = {}
 
     def save(self) -> None:
 
-        self.path.write_text(json.dumps(self.entries))
+        self.path.write_text(json.dumps(self.entries), encoding="utf-8")
 
     def record(self, sentence: str, verdict: Dict, project: Optional[str]) -> None:
 
