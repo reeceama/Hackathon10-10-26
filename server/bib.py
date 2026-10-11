@@ -29,7 +29,18 @@ def _key(source: Dict, used: set) -> str:
     return key
 
 
-def bibtex(sources: List[Dict]) -> str:
+def keys(sources: List[Dict]) -> Dict[str, str]:
+
+    """
+    A citation key for every source, e.g. "bobrowski2023cluster", by URL. Worked out over the whole
+    library, so a key copied from the Library always matches the one in any export.
+    """
+
+    used: set = set()
+    return {s.get("url"): _key(s, used) for s in sources}
+
+
+def bibtex(sources: List[Dict], cite_keys: Dict[str, str] = None) -> str:
 
     entries, used = [], set()
     for s in sources:
@@ -44,7 +55,7 @@ def bibtex(sources: List[Dict]) -> str:
             "doi": s.get("doi"), "url": s.get("url"), "urldate": s.get("captured_at"),
         }
         lines = [f"  {k} = {{{str(v).replace('{', '').replace('}', '')}}}" for k, v in fields.items() if v]
-        entries.append(f"@{'article' if journal else 'misc'}{{{_key(s, used)},\n" + ",\n".join(lines) + "\n}")
+        entries.append(f"@{'article' if journal else 'misc'}{{{(cite_keys or {}).get(s.get('url')) or _key(s, used)},\n" + ",\n".join(lines) + "\n}")
     return "\n\n".join(entries) + "\n"
 
 

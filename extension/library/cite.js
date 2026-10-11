@@ -106,6 +106,61 @@ const Cite = (() => {
   const locator = ({ page, time } = {}) => (page ? `, p. ${page}` : time != null ? `, ${timestamp(time)}` : "");
   const isVideo = (source) => source.type === "video";
 
+  // A journal article: its DOI lookup gave a volume or pages.
+  const isArticle = (source) => Boolean(source.volume || source.pages);
+  const pagesOf = (source, single = "p. ", several = "pp. ") => {
+    const pages = (source.pages || "").replace(/-/g, "–");
+    return pages ? `${pages.includes("–") ? several : single}${pages}` : "";
+  };
+
+  // Journal article entries, with journal, volume, issue, pages and DOI. Matches citations.article.
+  function article(style, source, number) {
+    const names = splitAuthors(source.author);
+    const title = cleanTitle(source).replace(/\.$/, "");
+    const d = parseDate(source.date);
+    const year = d ? d.year : "n.d.";
+    const journal = source.site || "", volume = source.volume || "", issue = source.issue || "";
+    const pages = (source.pages || "").replace(/-/g, "–");
+    const doi = source.doi;
+    const link = doi ? `https://doi.org/${doi}` : source.url || "";
+    const volIssue = issue ? `${volume}(${issue})` : volume;
+    const join = (parts, sep = ", ") => parts.filter(Boolean).join(sep);
+
+    if (style === "harvard") {
+      const who = names.length ? listAuthors(names, "", " and ") : journal;
+      return `${who} (${year}) ‘${title}’, ${join([journal, volIssue, pagesOf(source)])}. Available at: ${link}.`;
+    }
+    if (style === "mla") {
+      const people = names.map(parseName);
+      const full = (n) => (n.firsts.length ? `${n.last}, ${n.firsts.join(" ")}` : n.last);
+      const who = people.length === 1 ? `${endStop(full(people[0]))} ` : people.length === 2 ? `${full(people[0])}, and ${people[1].firsts.join(" ")} ${people[1].last}. ` : people.length ? `${full(people[0])}, et al. ` : "";
+      return `${who}“${title}.” ${join([journal, volume && `vol. ${volume}`, issue && `no. ${issue}`, year, pagesOf(source), link])}.`;
+    }
+    if (style === "ieee") {
+      const who = names.length ? `${initialsFirst(names)}, ` : "";
+      const when = d && d.month ? `${SHORT_MONTHS[d.month - 1]} ${year}` : year;
+      return `[${number}] ${who}“${title},” ${join([journal, volume && `vol. ${volume}`, issue && `no. ${issue}`, pagesOf(source, "Art. no. "), when])}` + (doi ? `, doi: ${doi}.` : ".");
+    }
+    if (style === "chicago") {
+      const people = names.map(parseName);
+      const full = people.map((p, i) => (i === 0 && p.firsts.length ? `${p.last}, ${p.firsts.join(" ")}` : `${p.firsts.join(" ")} ${p.last}`.trim()));
+      const who = full.length === 1 ? full[0] : full.length === 2 ? `${full[0]}, and ${full[1]}` : full.length ? `${full.slice(0, -1).join(", ")}, and ${full[full.length - 1]}` : journal;
+      const where = `${journal} ${volume}${issue ? ` (${issue})` : ""}${pages ? `: ${pages}` : ""}`.trim();
+      return `${endStop(who)} ${year}. “${title}.” ${where}. ${link}.`;
+    }
+    if (style === "vancouver") {
+      const people = names.map(parseName);
+      const who = people.slice(0, 6).map((p) => `${p.last} ${p.firsts.map((f) => f[0]).join("")}`.trim()).join(", ") + (people.length > 6 ? ", et al" : "");
+      return `${number}. ${who ? `${who}. ` : ""}${title}. ${endStop(journal)} ${year};${volIssue}${pages ? `:${pages}` : ""}.` + (doi ? ` doi:${doi}` : "");
+    }
+    if (style === "ams") {
+      const who = names.length ? `${initialsFirst(names)}, ` : "";
+      return `[${number}] ${who}${title}, ${join([`${journal} ${volume} (${year})`.trim(), issue && `no. ${issue}`, pages])}` + (doi ? `, DOI ${doi}.` : ".");
+    }
+    const who = names.length ? listAuthors(names, " ", ", & ") : journal;
+    return `${who} (${year}). ${title}. ${join([journal, volIssue, pages])}. ${link}`.trim();
+  }
+
   const STYLES = {
     apa: {
       name: "APA 7",
@@ -214,7 +269,7 @@ const Cite = (() => {
         const title = cleanTitle(source);
         const d = parseDate(source.date);
         const a = accessed(source);
-        const who = full.length === 1 ? full[0] : full.length === 2 ? `${full[0]} and ${full[1]}` : full.length ? `${full.slice(0, -1).join(", ")}, and ${full[full.length - 1]}` : site(source) || title;
+        const who = full.length === 1 ? full[0] : full.length === 2 ? `${full[0]}, and ${full[1]}` : full.length ? `${full.slice(0, -1).join(", ")}, and ${full[full.length - 1]}` : site(source) || title;
         const when = d && d.month && d.day ? `${MONTHS[d.month - 1]} ${d.day}, ${d.year}` : null;
         const video = isVideo(source) ? " YouTube video." : "";
         const tail = site(source) && when ? `${site(source)}, ${when}.` : site(source) ? `${site(source)}.` : "";
@@ -270,6 +325,12 @@ const Cite = (() => {
   // The part of a reference that is italic in the style (titles, or nothing for IEEE).
   function italicPart(styleName, source) {
     return styleName === "ieee" ? null : cleanTitle(source);
+  }
+
+  // Journal articles get their own entry in every style.
+  for (const [key, style] of Object.entries(STYLES)) {
+    const web = style.reference;
+    style.reference = (source, options = {}) => (isArticle(source) ? article(key, source, options.number) : web.call(style, source, options));
   }
 
   return { STYLES, sortKey, cleanTitle, italicPart, timestamp };

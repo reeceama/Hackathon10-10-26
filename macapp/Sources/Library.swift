@@ -396,6 +396,14 @@ struct LibraryView: View {
                 ForEach(library.projects, id: \.self) { name in Button(name) { library.move(url, to: name) } }
             }
             .fixedSize()
+            if let key = source["cite_key"] as? String {
+                Button {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString("\\cite{\(key)}", forType: .string)
+                } label: { Image(systemName: "text.quote") }
+                .buttonStyle(.borderless)
+                .help("Copy \\cite{\(key)} for LaTeX")
+            }
             if temporary {
                 Button("Save") { library.keep(url) }.glassButton()
             }

@@ -192,11 +192,94 @@ def in_text(style: str, source: Dict, number: Optional[int] = None, page=None, t
     return f"(“{_short_title(source)},” {year}{where})"
 
 
+def is_article(source: Dict) -> bool:
+
+    """
+    A journal article: its DOI lookup gave a volume or pages.
+    """
+
+    return bool(source.get("volume") or source.get("pages"))
+
+
+def _pages(source: Dict, single: str = "p. ", several: str = "pp. ") -> str:
+
+    pages = (source.get("pages") or "").replace("-", "–")
+    return f"{several if '–' in pages else single}{pages}" if pages else ""
+
+
+def _doi_link(source: Dict) -> str:
+
+    return f"https://doi.org/{source['doi']}" if source.get("doi") else source.get("url") or ""
+
+
+def article(style: str, source: Dict, number: Optional[int] = None) -> str:
+
+    """
+    The reference list entry for a journal article, with its journal, volume, issue, pages and DOI.
+    """
+
+    names = _split_authors(source.get("author"))
+    title = clean_title(source).rstrip(".")
+    d = _parse_date(source.get("date"))
+    year = d["year"] if d else "n.d."
+    journal, volume, issue = source.get("site") or "", source.get("volume") or "", source.get("issue") or ""
+    pages = (source.get("pages") or "").replace("-", "–")
+    link, doi = _doi_link(source), source.get("doi")
+    vol_issue = f"{volume}({issue})" if issue else volume
+
+    if style == "harvard":
+        who = _list_authors(names, "", " and ") if names else journal
+        parts = ", ".join(v for v in [journal, vol_issue, _pages(source)] if v)
+        return f"{who} ({year}) ‘{title}’, {parts}. Available at: {link}."
+
+    if style == "mla":
+        people = [_parse_name(n) for n in names]
+        full = lambda n: f"{n['last']}, {' '.join(n['firsts'])}" if n["firsts"] else n["last"]
+        who = (f"{_end_stop(full(people[0]))} " if len(people) == 1 else
+               f"{full(people[0])}, and {' '.join(people[1]['firsts'])} {people[1]['last']}. " if len(people) == 2 else
+               f"{full(people[0])}, et al. " if people else "")
+        parts = ", ".join(v for v in [journal, volume and f"vol. {volume}", issue and f"no. {issue}", year, _pages(source, "p. ", "pp. "), link] if v)
+        return f"{who}“{title}.” {parts}."
+
+    if style == "ieee":
+        who = f"{_initials_first(names)}, " if names else ""
+        when = f"{SHORT_MONTHS[d['month'] - 1]} {year}" if d and d["month"] else year
+        parts = ", ".join(v for v in [journal, volume and f"vol. {volume}", issue and f"no. {issue}", _pages(source, "Art. no. "), when] if v)
+        return f"[{number}] {who}“{title},” {parts}" + (f", doi: {doi}." if doi else ".")
+
+    if style == "chicago":
+        people = [_parse_name(n) for n in names]
+        full = [f"{p['last']}, {' '.join(p['firsts'])}" if i == 0 and p["firsts"] else f"{' '.join(p['firsts'])} {p['last']}".strip()
+                for i, p in enumerate(people)]
+        who = full[0] if len(full) == 1 else f"{full[0]}, and {full[1]}" if len(full) == 2 else ", ".join(full[:-1]) + ", and " + full[-1] if full else journal
+        where = f"{journal} {volume}" + (f" ({issue})" if issue else "") + (f": {pages}" if pages else "")
+        return f"{_end_stop(who)} {year}. “{title}.” {where.strip()}. {link}."
+
+    if style == "vancouver":
+        people = [_parse_name(n) for n in names]
+        who = ", ".join(f"{p['last']} {''.join(f[0] for f in p['firsts'])}".strip() for p in people[:6]) + (", et al" if len(people) > 6 else "")
+        where = f"{year};{vol_issue}" + (f":{pages}" if pages else "")
+        return f"{number}. {who + '. ' if who else ''}{title}. {_end_stop(journal)} {where}." + (f" doi:{doi}" if doi else "")
+
+    if style == "ams":
+        who = f"{_initials_first(names)}, " if names else ""
+        parts = ", ".join(v for v in [f"{journal} {volume} ({year})".strip(), issue and f"no. {issue}", pages] if v)
+        return f"[{number}] {who}{title}, {parts}" + (f", DOI {doi}." if doi else ".")
+
+    # APA 7: Surname, I., & Surname, I. (Year). Title. Journal, Volume(Issue), Pages. https://doi.org/...
+    who = _list_authors(names, " ", ", & ") if names else journal
+    parts = ", ".join(v for v in [journal, vol_issue, pages] if v)
+    return f"{who} ({year}). {title}. {parts}. {link}".strip()
+
+
 def reference(style: str, source: Dict, number: Optional[int] = None) -> str:
 
     """
     The reference list entry for a source in the given style.
     """
+
+    if is_article(source):
+        return article(style, source, number)
 
     names = _split_authors(source.get("author"))
     title = clean_title(source)
@@ -238,7 +321,7 @@ def reference(style: str, source: Dict, number: Optional[int] = None) -> str:
         people = [_parse_name(n) for n in names]
         full = [f"{p['last']}, {' '.join(p['firsts'])}" if i == 0 and p["firsts"] else f"{' '.join(p['firsts'])} {p['last']}".strip()
                 for i, p in enumerate(people)]
-        who = full[0] if len(full) == 1 else f"{full[0]} and {full[1]}" if len(full) == 2 else ", ".join(full[:-1]) + ", and " + full[-1] if full else site or title
+        who = full[0] if len(full) == 1 else f"{full[0]}, and {full[1]}" if len(full) == 2 else ", ".join(full[:-1]) + ", and " + full[-1] if full else site or title
         when = f"{MONTHS[d['month'] - 1]} {d['day']}, {d['year']}" if d and d["month"] and d["day"] else None
         video = " YouTube video." if _is_video(source) else ""
         tail = f"{site}, {when}." if site and when else f"{site}." if site else ""

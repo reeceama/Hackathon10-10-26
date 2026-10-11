@@ -39,6 +39,26 @@
         "content.js"
       ],
       "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.overleaf.com/project/*"
+      ],
+      "js": [
+        "overleaf/page.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://www.overleaf.com/project/*"
+      ],
+      "js": [
+        "overleaf/latex.js",
+        "overleaf/checker.js"
+      ],
+      "run_at": "document_idle"
     }
   ],
   "icons": {

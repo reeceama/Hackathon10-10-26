@@ -403,7 +403,9 @@ def set_focus(req: FocusRequest):
 
 @app.get("/sources")
 def list_sources():
-    return sources()
+    found = sources()
+    cite_keys = bib.keys(found)
+    return [{**s, "cite_key": cite_keys.get(s.get("url"))} for s in found]
 
 
 @app.delete("/sources")
@@ -529,7 +531,7 @@ def export_sources(format: str = "bibtex", project: str = "all"):
     # Saved sources in the chosen project, as a BibTeX or RIS file (Zotero reads both).
     chosen = library_project(project)
     kept = [s for s in sources() if s.get("kept") is not False and library.in_project(s.get("project"), chosen)]
-    return bib.ris(kept) if format == "ris" else bib.bibtex(kept)
+    return bib.ris(kept) if format == "ris" else bib.bibtex(kept, bib.keys(sources()))
 
 
 @app.post("/import")

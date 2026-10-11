@@ -55,7 +55,7 @@ def lookup(doi: str) -> Dict:
         "site": data.get("container-title") or data.get("publisher") or None,
         "volume": data.get("volume"),
         "issue": data.get("issue"),
-        "pages": data.get("page"),
+        "pages": data.get("page") or data.get("article-number"),  # online-only journals number articles
         "doi": doi,
     }
     return {k: v for k, v in found.items() if v}
