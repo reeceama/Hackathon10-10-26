@@ -172,13 +172,60 @@ enum WordSettings {
 }
 
 /// Finds the browser the Referee extension is loaded in, and its ID, from the browser's own settings.
+/// Puts the browser extension somewhere a browser can load it from (browsers can't look inside an
+/// app), shows that folder, and opens the browser's extensions page with instructions.
+enum BrowserExtension {
+
+    static let installed = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/Referee/extension")
+
+    static func install(repo: URL) {
+        let source = Services.bundled?.appendingPathComponent("extension") ?? repo.appendingPathComponent("extension")
+        let files = FileManager.default
+        try? files.createDirectory(at: installed.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? files.removeItem(at: installed)
+        do {
+            try files.copyItem(at: source, to: installed)
+        } catch {
+            let alert = NSAlert()
+            alert.messageText = "Couldn't set up the extension"
+            alert.informativeText = error.localizedDescription
+            alert.runModal()
+            return
+        }
+        let browser = ["Brave Browser", "Google Chrome", "Chromium"].first { NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID($0)) != nil }
+        let alert = NSAlert()
+        alert.messageText = "Install the Referee extension"
+        alert.informativeText = """
+        1. In \(browser ?? "Brave or Chrome"), open the extensions page (it's opening now) and turn on Developer mode.
+        2. Click Load unpacked and choose the "extension" folder that Finder is showing.
+
+        The extension collects what you read while you write. Without it, add sources with Add Source….
+        """
+        NSWorkspace.shared.activateFileViewerSelecting([installed])
+        if let browser {
+            let page = browser == "Brave Browser" ? "brave://extensions" : "chrome://extensions"
+            let task = Process()
+            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            task.arguments = ["-a", browser, page]
+            try? task.run()
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
+    }
+
+    private static func bundleID(_ app: String) -> String {
+        ["Brave Browser": "com.brave.Browser", "Google Chrome": "com.google.Chrome", "Chromium": "org.chromium.Chromium"][app] ?? ""
+    }
+}
+
 enum Library {
 
     static let browsers = [("BraveSoftware/Brave-Browser", "Brave Browser"), ("Google/Chrome", "Google Chrome"), ("Chromium", "Chromium")]
 
     static func open(repo: URL) {
         // The extension may be loaded from the app's own copy or from the code folder.
-        let folders = [Services.bundled?.appendingPathComponent("extension").path, repo.appendingPathComponent("extension").path]
+        let folders = [BrowserExtension.installed.path, Services.bundled?.appendingPathComponent("extension").path, repo.appendingPathComponent("extension").path]
             .compactMap { $0?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
         let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         for (folder, app) in browsers {
@@ -254,6 +301,7 @@ struct MenuContent: View {
         }
         Divider()
         Button("Add Source…") { show("add-source") }
+        Button("Install Browser Extension…") { BrowserExtension.install(repo: repo) }
         Button("Open Library") { Library.open(repo: repo) }
         Button("Settings…") { show("settings") }
             .keyboardShortcut(",")

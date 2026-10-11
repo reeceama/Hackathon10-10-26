@@ -8,6 +8,17 @@ It never writes for you. It only checks, credits and warns.
 
 Built in one day for the Invisible AI hackathon on 10 October 2026, where the brief was AI that works inside what you're already doing rather than something you have to prompt.
 
+## Download
+
+**[Download Referee for Mac](https://github.com/reeceama/Referee/releases/latest/download/Referee-mac.zip)** (Apple silicon, macOS 14 or later). Everything it needs is inside the app.
+
+1. Open the zip and drag **Referee** into Applications.
+2. Open it. The first time, macOS says it can't check the developer, because the app isn't notarised by Apple: go to **System Settings → Privacy & Security** and click **Open Anyway**. You only do this once.
+3. In Referee's settings, paste your [Anthropic API key](https://console.anthropic.com). It's kept in your Keychain.
+4. Add the sources you'll cite with **Add Source…** in the menu bar, or choose **Install Browser Extension…** to collect what you read automatically.
+
+Referee checks your writing as you type in Word. There's no Windows app yet; Windows users can run it from the code (see [Running it](#7-running-it)).
+
 ## Team members
 
 - Reece Mings-Alleyne ([GitHub](https://github.com/reeceama) / [LinkedIn](https://www.linkedin.com/in/reece-mings-alleyne/))

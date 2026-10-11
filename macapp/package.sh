@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds the downloadable Referee for Mac: one app with its own Python, Referee's code and
 # libraries, and the browser extension folder inside, so nothing else needs installing.
-# Output: macapp/dist/Referee.app and macapp/dist/Referee-mac.zip (Apple silicon).
+# Output: macapp/dist/Referee.app, Referee-mac.zip (Apple silicon) and Referee-extension.zip.
 #
 # Python comes from python-build-standalone (Astral), pinned below and checked against its
 # published SHA-256. The app is signed ad hoc, not notarised: the first time it's opened,
@@ -47,4 +47,6 @@ find "$APP" -name "__pycache__" -type d -prune -exec rm -rf {} +
 # 4. Sign everything ad hoc (Apple silicon won't run unsigned code) and zip it.
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1
 (cd "$DIST" && ditto -c -k --sequesterRsrc --keepParent Referee.app Referee-mac.zip)
+# The extension on its own too, for anyone who'd rather load it directly.
+(cd "$APP/Contents/Resources" && ditto -c -k --sequesterRsrc --keepParent extension "$DIST/Referee-extension.zip")
 echo "Built $APP ($(du -sh "$APP" | cut -f1)) and $DIST/Referee-mac.zip ($(du -sh "$DIST/Referee-mac.zip" | cut -f1))"
