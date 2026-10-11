@@ -63,6 +63,17 @@ class WindowsWord:
 
         return [(c.Scope.Start, c.Scope.End, c.Range.Text) for c in self._doc().Comments]
 
+    def page_break(self) -> None:
+
+        """
+        Adds a page break at the very end, with Word's own command (wdPageBreak), not a typed
+        page-break character.
+        """
+
+        doc = self._doc()
+        end = doc.Content.End - 1
+        doc.Range(end, end).InsertBreak(7)
+
     def append(self, text: str) -> None:
 
         doc = self._doc()

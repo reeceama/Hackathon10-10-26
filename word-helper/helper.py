@@ -12,6 +12,7 @@ The project is the current one chosen in the browser extension.
 
 import json
 import re
+import socket
 import sys
 import time
 from pathlib import Path
@@ -32,6 +33,8 @@ COMMENT_PREFIX = "Referee: "
 HEADINGS = {"References", "Reference list", "Works Cited"}
 SENTENCE = re.compile(r"[^.!?\r\n]+[.!?]+[\"”’)\]]*")
 CLOSING = re.compile(r"[.!?]+[\"”’)\]]*$")
+# Full stops that don't end a sentence: "n.d." in Referee's own citations, "et al.", "p. 4" and so on.
+ABBREVIATIONS = re.compile(r"\b(n\.d|et al|pp?|e\.g|i\.e|vol|no|para|cf|ch|ed|eds|fig)\.", re.IGNORECASE)
 HOME = Path.home() / ".referee"
 
 
@@ -81,6 +84,11 @@ class DocumentState:
         state.setdefault("cited", {})     # url -> source metadata
         state.setdefault("numbers", {})   # url -> number, for numbered styles
         state.setdefault("listed", [])    # reference entries already in the document
+        state.setdefault("citations", {}) # url -> in-text citations inserted, for the audit
+        state.setdefault("entries", {})   # url -> its reference entry, for the audit
+        state.setdefault("reported", None) # reference check last sent to the library
+        state.setdefault("warnings", {})  # sentence -> its warnings, shown in the library
+        state.setdefault("reported_warnings", None)
         return state
 
     def save(self) -> None:
@@ -110,8 +118,10 @@ def finished_sentences(text: str) -> List[Dict]:
     """
 
     found = []
-    for match in SENTENCE.finditer(writing_part(text)):
-        sentence = match.group().strip()
+    # Hide abbreviation full stops behind a same-length stand-in, so positions don't change.
+    masked = ABBREVIATIONS.sub(lambda m: m.group().replace(".", "\u2024"), writing_part(text))
+    for match in SENTENCE.finditer(masked):
+        sentence = match.group().strip().replace("\u2024", ".")
         if len(sentence.split()) < MIN_WORDS:
             continue
         start = match.start() + (len(match.group()) - len(match.group().lstrip()))
@@ -119,7 +129,10 @@ def finished_sentences(text: str) -> List[Dict]:
     return found
 
 
-def notes_for(result: Dict) -> List[str]:
+QUOTED = re.compile(r'"[^"]{3,}"|“[^”]{3,}”')
+
+
+def notes_for(result: Dict, sentence: str = "") -> List[str]:
 
     """
     The comments a verdict deserves, the same wording as the other Referee apps.
@@ -133,6 +146,8 @@ def notes_for(result: Dict) -> List[str]:
                 + (f" Closest in your reading: {closest}." if closest else "")]
     notes = []
     source = result.get("source") or {}
+    if result["label"] == "supports" and QUOTED.search(sentence) and result.get("page") is None and result.get("time") is None:
+        notes.append("Direct quotes need a page number, and this source has none. Add a paragraph number or section instead, e.g. (para. 4).")
     if source.get("retracted"):
         notes.append("This paper has been retracted. Check the retraction notice before relying on it.")
     if result["label"] == "contradicts":
@@ -200,6 +215,35 @@ class Helper:
             self.last_text = text
             return
         self.check(name, text)
+        self.audit(name)
+
+    def audit(self, name: str) -> None:
+
+        """
+        Keeps checking the reference list against the text, and reports entries whose source is no
+        longer cited, or that are missing a date or an author, to the library's Reference check.
+        Nothing is written into the reference list itself: commenting there can hang Word.
+        """
+
+        document = self.word.document()
+        if document is None:
+            return
+        state = self.state.get(name)
+        writing = writing_part(document[1])
+        issues = []
+        for url, entry in state["entries"].items():
+            source = state["cited"].get(url) or {}
+            inserted = state["citations"].get(url, [])
+            if inserted and not any(citation in writing for citation in inserted):
+                issues.append({"entry": entry, "note": "No longer cited in the text: remove it from the reference list, or cite it again."})
+            if not source.get("date"):
+                issues.append({"entry": entry, "note": "No date found: check the source for one, or keep \"n.d.\"."})
+            if not source.get("author"):
+                issues.append({"entry": entry, "note": "No author found: check whether a person or organisation is named."})
+        if issues != state.get("reported"):
+            if self.post("/audit", {"document": Path(name).name, "issues": issues}) is not None:
+                state["reported"] = issues
+                self.state.save()
 
     def check(self, name: str, text: str) -> None:
 
@@ -224,9 +268,12 @@ class Helper:
             if self.word.text_at(start, end) != sentence:
                 continue  # the document moved under us: leave it for the next pause
             checked.add(sentence)
-            for note in notes_for(result):
+            notes = notes_for(result, sentence)
+            for note in notes:
                 if (start, note) not in existing:
                     self.word.comment(start, end, note)
+            if notes:  # also listed in the library's Warnings card
+                state["warnings"][sentence] = [note.removeprefix(COMMENT_PREFIX) for note in notes]
             if not result.get("match"):
                 continue
             label = result["label"]
@@ -242,9 +289,27 @@ class Helper:
 
         state["checked"] = sorted(checked)
         self.update_references(state, settings["style"])
+        self.report_warnings(name, state)
         self.state.save()
         document = self.word.document()
         self.last_text = document[1] if document else None  # our own edits aren't typing
+
+    def report_warnings(self, name: str, state: Dict) -> None:
+
+        """
+        Sends the warnings for sentences still in the document to the library's Warnings card.
+        """
+
+        document = self.word.document()
+        if document is None:
+            return
+        writing = writing_part(document[1])
+        current = {sentence: notes for sentence, notes in state["warnings"].items()
+                   if sentence.rstrip(".!?\"”’)]") [:60] in writing}
+        issues = [{"entry": sentence, "note": note} for sentence, notes in current.items() for note in notes]
+        if issues != state.get("reported_warnings"):
+            if self.post("/warnings", {"document": Path(name).name, "issues": issues}) is not None:
+                state["reported_warnings"] = issues
 
     def cite(self, state: Dict, style: str, result: Dict) -> str:
 
@@ -252,8 +317,11 @@ class Helper:
         url = source.get("url") or citations.clean_title(source)
         state["cited"][url] = source
         state["numbers"].setdefault(url, len(state["numbers"]) + 1)
-        return citations.in_text(style, source, number=state["numbers"][url],
-                                 page=result.get("page"), time=result.get("time"))
+        citation = citations.in_text(style, source, number=state["numbers"][url],
+                                     page=result.get("page"), time=result.get("time"))
+        if citation not in state["citations"].setdefault(url, []):
+            state["citations"][url].append(citation)
+        return citation
 
     def update_references(self, state: Dict, style: str) -> None:
 
@@ -267,6 +335,7 @@ class Helper:
         else:
             sources.sort(key=lambda pair: citations.sort_key(pair[1]))
         entries = [citations.reference(style, source, number=state["numbers"][url]) for url, source in sources]
+        state["entries"].update({url: entry for (url, _), entry in zip(sources, entries)})
         new = [entry for entry in entries if entry not in state["listed"]]
         if not new:
             return
@@ -275,9 +344,11 @@ class Helper:
             return
         has_heading = any(line.strip() in HEADINGS for line in re.split(r"[\r\n]", document[1]))
         block = "\r".join(new)
-        if not has_heading:
-            block = "\x0c" + citations.HEADINGS[style] + "\r" + block  # page break, then the heading
-        self.word.append("\r" + block)
+        if has_heading:
+            self.word.append("\r" + block)
+        else:
+            self.word.page_break()  # Word's own page break: a typed one leaves Word fragile
+            self.word.append(citations.HEADINGS[style] + "\r" + block)  # the heading starts the new page
         state["listed"].extend(new)
 
 
@@ -292,8 +363,29 @@ def driver():
     raise SystemExit("The Word helper runs on macOS and Windows.")
 
 
+LOCK_PORT = 8766  # only one helper may edit Word at a time: two at once can hang Word
+
+
+def single_instance():
+
+    """
+    Claims a local port as a lock. A second helper finds it taken and stops, so two never edit
+    the same document. The operating system releases it when the helper exits, even after a crash.
+    """
+
+    lock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    if sys.platform == "win32":
+        lock.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+    try:
+        lock.bind(("127.0.0.1", LOCK_PORT))
+    except OSError:
+        raise SystemExit("Another Referee Word helper is already running.")
+    return lock
+
+
 def main() -> None:
 
+    lock = single_instance()  # held for as long as the helper runs
     helper = Helper(driver())
     print("Referee Word helper running. It checks the document open in Word as you write.")
     while True:

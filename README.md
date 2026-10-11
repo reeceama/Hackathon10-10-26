@@ -17,7 +17,7 @@ Built in one day for the Invisible AI hackathon on 10 October 2026, where the br
 3. In Referee's settings, paste your [Anthropic API key](https://console.anthropic.com). It's kept in your Keychain.
 4. Add the sources you'll cite with **Add Source…** in the menu bar, or choose **Install Browser Extension…** to collect what you read automatically.
 
-Referee checks your writing as you type in Word, and updates itself when a new release comes out. There's no Windows app yet; Windows users can run it from the code (see [Running it](#7-running-it)).
+Referee checks your writing as you type in Word, and updates itself when a new release comes out. There's no Windows app yet; Windows users can run it from the code (see [Running it](#6-running-it)).
 
 ## Team members
 
@@ -30,15 +30,14 @@ Referee checks your writing as you type in Word, and updates itself when a new r
 2. [How it works](#2-how-it-works)
 3. [Data and models](#3-data-and-models)
 4. [Validation](#4-validation)
-5. [Limitations](#5-limitations)
-6. [Repository layout](#6-repository-layout)
-7. [Running it](#7-running-it)
-8. [API](#8-api)
-9. [License](#9-license)
+5. [Repository layout](#5-repository-layout)
+6. [Running it](#6-running-it)
+7. [API](#7-api)
+8. [License](#8-license)
 
 ## 1. What it does
 
-**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default the extension captures only while you're writing in Word (and for five minutes after), or while research mode is on: switched on from the menu bar or the popup, or by a macOS Focus once two Shortcuts automations are set up (see [Running it](#7-running-it)). Sources can also be added by hand with **Add Source** in the menu bar: a link to a page, PDF or YouTube video, or a PDF on your Mac.
+**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default the extension captures only while you're writing in Word (and for five minutes after), or while research mode is on: switched on from the menu bar or the popup, or by a macOS Focus once two Shortcuts automations are set up (see [Running it](#6-running-it)). Sources can also be added by hand with **Add Source** in the menu bar: a link to a page, PDF or YouTube video, or a PDF on your Mac.
 
 Captured reading is temporary: it can be cited straight away, and is forgotten after 15 minutes (or an hour, or a day) unless you keep it. **Save for later** in the extension's popup keeps the page you're on, whether or not it was captured; sources added by hand are kept straight away, and any source your writing cites is kept automatically. Kept sources belong to the current project, chosen or created from the menu bar, the library or the popup. Projects are kept apart: writing is only checked against its own project's sources, plus any other projects you link it to in the library, where sources can also be moved between projects. The extension never runs in private (Incognito) windows. The library lists your reading, saved or temporary, and lets you save, move or forget any source.
 
@@ -142,22 +141,7 @@ Earlier runs with previous versions of the prompt gave precisions of 0.91 and 0.
 
 Ignoring stock phrasing widened the margin more than five times. The chosen setting is 3-word runs, stock phrases appearing in 4 or more sentences of the reading, and a cut-off of 0.30.
 
-## 5. Limitations
-
-- **The intervals are wide.** 100 pairs gives a precision interval of roughly 87% to 99%. At the low end, about one marker in eight would be wrong.
-- **The threshold was chosen on the same pairs it is reported on,** so the figures are slightly optimistic. A fairer test would choose it on half the pairs and report on the other half.
-- **Answers vary between runs.** The model doesn't accept a sampling temperature, so the same sentence can occasionally get a different verdict. The evaluation measures behaviour across many cases rather than relying on any single answer.
-- **SciFact is not the web.** The benchmark is scientific abstracts. Everyday articles may behave differently, and that hasn't been tested yet.
-- **The copying calibration is small:** 21 hand-written sentences from one article. It is a sensible setting, not a benchmark. Which phrases count as stock depends on what has been captured, so it should be rerun on a wider set of reading.
-- **Only double quotation marks are read as quotes.** Single quotes are skipped because they look the same as apostrophes, and square brackets inside a quote are accepted as edits without checking what they replace.
-- **Scanned PDFs and videos without captions can't be read.** Spoken transcripts also match written sentences less closely than articles do.
-- **The extra checks are rules of thumb.** Whether a sentence needs a source, and what counts as an old source or over-reliance, are simple rules, not evaluated models.
-- **Author metadata is unreliable.** Many pages don't publish a usable author, so the organisation is used instead.
-- **Learning isn't fed by Word yet.** The usefulness model only learns from actions the apps report, and the Word helper doesn't report any yet. With only a handful of events the model would be easily swayed anyway, which is why it falls back to the evaluated threshold until it has seen both outcomes.
-- **Word citations are plain text.** The Word helper types citations and the reference list rather than using Word's citation fields, and adds new references to the end of the list rather than sorting them in. Sentences in tables or next to Word fields may be skipped rather than risk marking the wrong text.
-- **The skip list is a list.** It covers major banks, payment, login and account pages, but it can't name every private site. The password-box rule catches most of the rest.
-
-## 6. Repository layout
+## 5. Repository layout
 
 ```
 ├── referee.py                  starts and watches the background parts (macOS and Windows)
@@ -211,7 +195,7 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 └── .gitignore
 ```
 
-## 7. Running it
+## 6. Running it
 
 ```bash
 python3 -m venv .venv
@@ -250,7 +234,7 @@ To switch research mode on with a macOS Focus, create two automations in the Sho
 
 To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. Start writing in Word and read some sources; anything you read while writing is captured. Open the library from the popup to see your reading and references. API docs are at http://localhost:8000/docs while the backend is running.
 
-## 8. API
+## 7. API
 
 | Endpoint | Body | Returns |
 |---|---|---|
@@ -280,6 +264,6 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 
 `label` is `supports`, `contradicts` or `misquote`. Feedback events are `opened_source`, `edited_after`, `dismissed` and `ignored`.
 
-## 9. License
+## 8. License
 
 Code released under the [MIT License](LICENSE).

@@ -1,3 +1,4 @@
+import json
 import threading
 import time
 from datetime import date
@@ -392,6 +393,64 @@ def set_settings(req: SettingsRequest):
 def library_project(project: Optional[str]):
     # "all" (or nothing): every source; "none": sources with no project; otherwise that project.
     return None if project in (None, "", "all") else "" if project == "none" else project
+
+
+class AuditRequest(BaseModel):
+    document: str
+    issues: list[dict]
+
+
+class Audits:
+
+    """
+    Findings from the Word helper for each document (its reference check, or its warnings),
+    shown in the library.
+    """
+
+    def __init__(self, path):
+
+        self.path = path
+        try:
+            self.documents = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            self.documents = {}
+
+    def save(self, document, issues):
+
+        if issues:
+            self.documents[document] = {"issues": issues, "at": time.time()}
+        else:
+            self.documents.pop(document, None)
+        self.path.write_text(json.dumps(self.documents), encoding="utf-8")
+
+
+audits = Audits(paths.data("audits.json"))
+
+
+@app.post("/audit")
+def save_audit(req: AuditRequest):
+    audits.save(req.document, req.issues)
+    return {"ok": True}
+
+
+@app.get("/audit")
+def list_audits():
+    return audits.documents
+
+
+warnings_found = Audits(paths.data("warnings.json"))
+
+
+@app.post("/warnings")
+def save_warnings(req: AuditRequest):
+    # The Word helper's warnings for each document (contradictions, misquotes and so on).
+    warnings_found.save(req.document, req.issues)
+    return {"ok": True}
+
+
+@app.get("/warnings")
+def list_warnings():
+    return warnings_found.documents
 
 
 @app.get("/references")

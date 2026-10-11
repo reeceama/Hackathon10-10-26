@@ -13,6 +13,8 @@ feedback.json
 claims.json
 reading.json
 verdicts.json
+audits.json
+warnings.json
 
 # Evaluation outputs
 server/eval_*.csv

@@ -109,6 +109,20 @@ class MacWord:
             found.append((int(start), int(end), text))
         return found
 
+    def page_break(self) -> None:
+
+        """
+        Adds a page break at the very end, with Word's own command. Typing a page-break character
+        instead leaves Word fragile: its next scripted change to the document freezes it.
+        """
+
+        _run('''
+            tell application "Microsoft Word"
+                set d to active document
+                set n to end of content of text object of d
+                insert break at (create range d start (n - 1) end (n - 1)) break type page break
+            end tell''')
+
     def append(self, text: str) -> None:
 
         """

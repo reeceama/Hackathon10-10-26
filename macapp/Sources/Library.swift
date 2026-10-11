@@ -15,6 +15,8 @@ final class LibraryModel: ObservableObject {
     @Published var filter = "all"            // "all", "none" or a project name
     @Published var style = WordSettings.style
     @Published var search = ""
+    @Published var audits: [(document: String, issues: [(entry: String, note: String)])] = []
+    @Published var warnings: [(document: String, issues: [(entry: String, note: String)])] = []
 
     func load() {
         Task {
@@ -26,8 +28,22 @@ final class LibraryModel: ObservableObject {
                 links = settings["links"] as? [String: [String]] ?? [:]
             }
             if filter != "all" && filter != "none" && !projects.contains(filter) { filter = "all" }
+            audits = LibraryModel.findings(await API.get("audit") ?? [:])
+            warnings = LibraryModel.findings(await API.get("warnings") ?? [:])
             await loadReferences()
         }
+    }
+
+    /// Per-document findings from the Word helper, as (document, [(entry, note)]).
+    static func findings(_ found: [String: Any]) -> [(document: String, issues: [(entry: String, note: String)])] {
+            found.compactMap { document, value in
+                let issues = ((value as? [String: Any])?["issues"] as? [[String: Any]] ?? [])
+                    .compactMap { issue -> (entry: String, note: String)? in
+                        guard let entry = issue["entry"] as? String, let note = issue["note"] as? String else { return nil }
+                        return (entry, note)
+                    }
+                return issues.isEmpty ? nil : (document, issues)
+            }.sorted { $0.document < $1.document }
     }
 
     func loadReferences() async {
@@ -109,6 +125,12 @@ struct LibraryView: View {
                 Text(library.summary).font(.callout).foregroundStyle(.secondary)
                 card(title: "Projects", symbol: "folder") { projectsCard }
                 card(title: "References", symbol: "text.quote") { referencesCard }
+                if !library.warnings.isEmpty {
+                    card(title: "Warnings", symbol: "exclamationmark.triangle") { findingsCard(library.warnings) }
+                }
+                if !library.audits.isEmpty {
+                    card(title: "Reference Check", symbol: "checklist") { findingsCard(library.audits) }
+                }
                 card(title: "Reading", symbol: "books.vertical") { readingCard }
                 forgetEverything
             }
@@ -244,6 +266,22 @@ struct LibraryView: View {
             }
             ForEach(Array(library.references.enumerated()), id: \.offset) { _, entry in
                 Text(entry).font(.system(.body, design: .serif)).textSelection(.enabled)
+            }
+        }
+    }
+
+    // MARK: Reference check, from the Word helper
+
+    private func findingsCard(_ findings: [(document: String, issues: [(entry: String, note: String)])]) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ForEach(findings, id: \.document) { audit in
+                Text(audit.document).fontWeight(.semibold)
+                ForEach(Array(audit.issues.enumerated()), id: \.offset) { _, issue in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(issue.note).font(.callout).foregroundStyle(.orange)
+                        Text(issue.entry).font(.system(.caption, design: .serif)).foregroundStyle(.secondary).lineLimit(2)
+                    }
+                }
             }
         }
     }
