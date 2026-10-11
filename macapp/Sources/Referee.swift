@@ -123,7 +123,8 @@ final class Model: ObservableObject {
 enum API {
 
     static func request(_ path: String, body: [String: Any]? = nil) async -> Data? {
-        var request = URLRequest(url: server.appendingPathComponent(path), timeoutInterval: 4)
+        let url = path.contains("?") ? URL(string: "\(server.absoluteString)/\(path)")! : server.appendingPathComponent(path)
+        var request = URLRequest(url: url, timeoutInterval: 4)
         request.setValue("1", forHTTPHeaderField: "X-Referee")
         if let body {
             request.httpMethod = "POST"
@@ -141,6 +142,22 @@ enum API {
     static func getList(_ path: String) async -> [[String: Any]] {
         guard let data = await request(path) else { return [] }
         return (try? JSONSerialization.jsonObject(with: data)) as? [[String: Any]] ?? []
+    }
+
+    /// A GET whose path already carries a query string.
+    static func getPath(_ path: String) async -> [String: Any]? {
+        var request = URLRequest(url: URL(string: "\(server.absoluteString)/\(path)")!, timeoutInterval: 4)
+        request.setValue("1", forHTTPHeaderField: "X-Referee")
+        guard let data = try? await URLSession.shared.data(for: request).0 else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+    }
+
+    static func delete(_ path: String) async -> [String: Any]? {
+        var request = URLRequest(url: URL(string: "\(server.absoluteString)/\(path)")!, timeoutInterval: 4)
+        request.httpMethod = "DELETE"
+        request.setValue("1", forHTTPHeaderField: "X-Referee")
+        guard let data = try? await URLSession.shared.data(for: request).0 else { return nil }
+        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
     static func post(_ path: String, _ body: [String: Any]) async -> [String: Any]? {
@@ -171,7 +188,6 @@ enum WordSettings {
     }
 }
 
-/// Finds the browser the Referee extension is loaded in, and its ID, from the browser's own settings.
 /// Puts the browser extension somewhere a browser can load it from (browsers can't look inside an
 /// app), shows that folder, and opens the browser's extensions page with instructions.
 enum BrowserExtension {
@@ -219,45 +235,6 @@ enum BrowserExtension {
     }
 }
 
-enum Library {
-
-    static let browsers = [("BraveSoftware/Brave-Browser", "Brave Browser"), ("Google/Chrome", "Google Chrome"), ("Chromium", "Chromium")]
-
-    static func open(repo: URL) {
-        // The extension may be loaded from the app's own copy or from the code folder.
-        let folders = [BrowserExtension.installed.path, Services.bundled?.appendingPathComponent("extension").path, repo.appendingPathComponent("extension").path]
-            .compactMap { $0?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
-        let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        for (folder, app) in browsers {
-            let base = support.appendingPathComponent(folder)
-            let profiles = (try? FileManager.default.contentsOfDirectory(atPath: base.path)) ?? []
-            for profile in profiles {
-                for name in ["Secure Preferences", "Preferences"] {
-                    let file = base.appendingPathComponent(profile).appendingPathComponent(name)
-                    guard let data = try? Data(contentsOf: file),
-                          let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                          let settings = (json["extensions"] as? [String: Any])?["settings"] as? [String: Any] else { continue }
-                    for (id, info) in settings {
-                        let path = ((info as? [String: Any])?["path"] as? String ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                        if folders.contains(path) {
-                            let url = "chrome-extension://\(id)/library/library.html"
-                            let task = Process()
-                            task.executableURL = URL(fileURLWithPath: "/usr/bin/open")
-                            task.arguments = ["-a", app, url]
-                            try? task.run()
-                            return
-                        }
-                    }
-                }
-            }
-        }
-        let alert = NSAlert()
-        alert.messageText = "Couldn't find the Referee extension"
-        alert.informativeText = "Load the extension folder in Brave or Chrome first."
-        alert.runModal()
-    }
-}
-
 let styles = [("apa", "APA 7"), ("harvard", "Harvard"), ("mla", "MLA 9"), ("ieee", "IEEE (Numbered)"), ("ams", "AMS (Numbered)")]
 let keepOptions = [(15, "15 Minutes"), (60, "1 Hour"), (1440, "1 Day")]
 
@@ -302,7 +279,7 @@ struct MenuContent: View {
         Divider()
         Button("Add Source…") { show("add-source") }
         Button("Install Browser Extension…") { BrowserExtension.install(repo: repo) }
-        Button("Open Library") { Library.open(repo: repo) }
+        Button("Open Library") { show("library") }
         Button("Settings…") { show("settings") }
             .keyboardShortcut(",")
         Divider()
@@ -777,6 +754,10 @@ struct RefereeApp: App {
                 .background(SettingsOpener())
             if !model.online { Text("⚠︎") }
         }
+        Window("Library", id: "library") {
+            LibraryView()
+        }
+        .windowStyle(.hiddenTitleBar)
         Window("Add Source", id: "add-source") {
             AddSourceView(model: model)
         }

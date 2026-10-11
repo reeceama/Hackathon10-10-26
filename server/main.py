@@ -2,12 +2,13 @@ import threading
 import time
 from datetime import date
 from pathlib import Path
+from typing import Optional
 
 import requests
 import trafilatura
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
  
 import base64
@@ -21,6 +22,7 @@ from verify import verify
 from claims import needs_source
 from feedback import FeedbackModel
 import paths
+import library
 import api_key
 from claim_log import ClaimLog
  
@@ -382,6 +384,21 @@ def get_settings():
 @app.post("/settings")
 def set_settings(req: SettingsRequest):
     return reading.update(req.model_dump(exclude_none=True))
+
+
+def library_project(project: Optional[str]):
+    # "all" (or nothing): every source; "none": sources with no project; otherwise that project.
+    return None if project in (None, "", "all") else "" if project == "none" else project
+
+
+@app.get("/references")
+def list_references(project: str = "all", style: str = "apa"):
+    return library.references(sources(), claim_log.claims(), library_project(project), style)
+
+
+@app.get("/report", response_class=HTMLResponse)
+def proof_of_work(project: str = "all", style: str = "apa"):
+    return library.report(sources(), claim_log.claims(), library_project(project), style)
 
 
 @app.get("/claims")

@@ -62,6 +62,10 @@ def server_parts():
     client.post("/settings", json={"project": name}, headers=headers)
     check("project names survive a restart", json.loads((work / "data" / "reading.json").read_text(encoding="utf-8"))["project"] == name)
     check("other websites are refused", client.get("/sources", headers={"Origin": "https://example.com"}).status_code == 403)
+    references = client.get("/references?project=all&style=apa", headers=headers).json()
+    check("reference list builds", isinstance(references.get("entries"), list) and references.get("heading") == "References")
+    report = client.get("/report?project=all", headers=headers).text
+    check("proof-of-work report builds", "Proof of work" in report and "Waggle dance" in report)
     rejected = client.post("/api-key", json={"key": "sk-ant-not-a-real-key"}, headers=headers).json()
     check("a wrong API key is rejected, not saved", rejected.get("ok") is False)
 
