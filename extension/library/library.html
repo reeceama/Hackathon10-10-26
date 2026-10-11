@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en-GB">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Referee library</title>
+    <link rel="stylesheet" href="library.css" />
+  </head>
+  <body>
+    <header>
+      <div class="brand">Referee library</div>
+      <span class="server" id="server" data-state="checking">Connecting…</span>
+    </header>
+
+    <main>
+      <div class="controls">
+        <label>Project
+          <select id="project"><option value="">All reading</option></select>
+        </label>
+        <input id="search" type="search" placeholder="Search your reading" aria-label="Search your reading" />
+        <button id="proof">Proof of work report</button>
+      </div>
+
+      <p id="summary" class="summary"></p>
+
+      <section>
+        <div class="section-head">
+          <h2>References</h2>
+          <div class="tools">
+            <select id="citation-style" aria-label="Citation style">
+              <option value="apa">APA 7</option>
+              <option value="harvard">Harvard</option>
+              <option value="mla">MLA 9</option>
+              <option value="ieee">IEEE (computing)</option>
+              <option value="ams">AMS (mathematics)</option>
+            </select>
+            <button id="copy-refs">Copy</button>
+          </div>
+        </div>
+        <p class="hint" id="refs-empty">Sources appear here once they back a claim in your writing.</p>
+        <ol id="ref-list"></ol>
+      </section>
+
+      <section>
+        <div class="section-head"><h2>Reading</h2><span class="hint" id="count"></span></div>
+        <ul id="sources"></ul>
+      </section>
+    </main>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="cite.js"></script>
+    <script src="library.js"></script>
+  </body>
+</html>

@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from dotenv import load_dotenv
 
 load_dotenv()
-client = anthropic.Anthropic(timeout=10.0)  # never leave the editor waiting
+client = anthropic.Anthropic(timeout=10.0)  # never leave the writer waiting
 
 MODEL = "claude-haiku-5-5"
 THRESHOLD = 0.7  # SciFact, current prompt: precision 0.96 (95% CI 0.87-0.99), recall 0.70; 0.6 gave 0.93 and 0.76

@@ -9,6 +9,7 @@ const DEFAULTS = { server: "http://localhost:8000", project: "" };
 const PING_EVERY = 60 * 1000;  // the server treats a ping as "writing" for five minutes
 const PAUSE_MS = 1500;         // check after this long without typing
 const MIN_WORDS = 5;
+const OLD_SOURCE_YEARS = 10;
 const LABELS = { supports: "Supported", contradicts: "Your source says otherwise", misquote: "Misquote" };
 
 function sentences(text) {
@@ -57,11 +58,24 @@ class RefereeView extends ItemView {
       const card = box.createDiv({ cls: `referee-card ${m ? m.label : "needs"}` });
       card.createDiv({ cls: "referee-label", text: m ? LABELS[m.label] || m.label : "Needs a source" });
       card.createDiv({ cls: "referee-sentence", text: sentence.length > 90 ? sentence.slice(0, 90) + "…" : sentence });
-      if (!m) continue;
+      if (!m) {
+        card.createDiv({ cls: "referee-sentence", text: "This reads like a factual claim, but nothing you've read supports it yet." });
+        if (r.closest?.length) card.createDiv({ text: `Closest in your reading: ${r.closest.map((c) => c.title || c.url).join("; ")}` });
+        continue;
+      }
       card.createDiv({ cls: "referee-quote", text: `“${m.quote}”` });
       card.createDiv({ text: `${m.source?.title || m.source?.url || ""}${year(m.source) ? ` · ${year(m.source)}` : ""}` });
       if (m.misquote && m.label !== "misquote") card.createDiv({ cls: "referee-warning", text: "This quotation doesn't match the source exactly." });
       if (m.too_close) card.createDiv({ cls: "referee-warning", text: "Very close to the source's wording. Consider quoting it or rephrasing." });
+      for (const c of (m.changes || []).slice(0, 3)) {
+        card.createDiv({ cls: "referee-warning", text: c.wrote && c.source ? `You quoted “${c.wrote}”; the source says “${c.source}”.`
+          : c.wrote ? `“${c.wrote}” isn't in the source's wording.` : `You left out “${c.source}”.` });
+      }
+      for (const n of m.wrong_numbers || []) card.createDiv({ cls: "referee-warning", text: `“${n}” doesn't appear in the source. Check the figure.` });
+      if (m.together_with) card.createDiv({ cls: "referee-warning", text: `This claim combines two sources: also cite ${m.together_with.source?.title || m.together_with.source?.url}.` });
+      if (m.label === "supports" && year(m.source) && new Date().getFullYear() - year(m.source) > OLD_SOURCE_YEARS) {
+        card.createDiv({ cls: "referee-warning", text: `This source is from ${year(m.source)}. Check whether newer evidence agrees.` });
+      }
       if (m.mixed) card.createDiv({ cls: "referee-warning", text: `Mixed evidence: ${m.mixed.title || m.mixed.url} points the other way.` });
       if (m.label === "supports") {
         const cite = inText(m.source);
@@ -130,7 +144,7 @@ module.exports = class RefereePlugin extends Plugin {
       if (this.checks.has(sentence)) continue;
       this.checks.set(sentence, { pending: true });
       this.api("/check", { sentence, project: this.settings.project })
-        .then((r) => this.checks.set(sentence, { match: r.match ? r : null, needs_source: !r.match && Boolean(r.needs_source) }))
+        .then((r) => this.checks.set(sentence, { match: r.match ? r : null, needs_source: !r.match && Boolean(r.needs_source), closest: r.closest || [] }))
         .catch(() => this.checks.delete(sentence))  // server not running: try again next time
         .finally(() => this.redraw());
     }

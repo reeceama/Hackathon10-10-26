@@ -4,7 +4,7 @@
 
 const PARALLEL = 4; // sentences checked at once
 const TAG = "referee"; // marks the sentences Referee has highlighted, so they can be cleared
-// Same scheme as the browser editor: green supported, yellow card for wording, red card for
+// Same scheme throughout Referee: green supported, yellow card for wording, red card for
 // contradictions. Word only shows its own highlighter colours, so these are its palette names.
 const HIGHLIGHT = { supports: "BrightGreen", warn: "Yellow", contradicts: "Red", misquote: "Yellow" };
 // Word mutes highlights in dark mode but keeps coloured text readable, so dark mode colours
@@ -22,6 +22,7 @@ const NUMBERS_SETTING = "referee-numbers"; // document setting: source URL -> IE
 const PROJECT_SETTING = "referee-project"; // document setting: only check against this project's reading
 const AUTO_SETTING = "referee-auto"; // document setting: check as the person writes
 const PAUSE_MS = 2500; // automatic checks wait for a pause in writing
+const OLD_SOURCE_YEARS = 10; // a supporting source older than this gets a "check for newer evidence" note
 const LIST_HEADINGS = ["References", "Reference list"];
 
 const button = document.getElementById("check");
@@ -552,6 +553,25 @@ function currentStyle() {
   return STYLES[styleSelect.value] || STYLES.apa;
 }
 
+// A factual-sounding claim nothing in the reading supports: a comment suggesting where to
+// look, never text written for the person.
+async function noteNeedsSource(context, { paragraph, sentence, occurrence }, closest) {
+  const core = sentenceKey(sentence).replace(/[.!?]+["”’)]*$/, "");
+  const found = paragraph.search(core.slice(-250), { matchCase: true });
+  found.load("items");
+  await context.sync();
+  if (found.items.length <= occurrence) return;
+  const range = found.items[occurrence];
+  const old = range.getComments();
+  old.load("items/content");
+  await context.sync();
+  for (const comment of old.items) if (isRefereeComment(comment)) comment.delete();
+  const nearest = closest.map((c) => cleanTitle(c.title || c.url)).join("; ");
+  range.insertComment(`${COMMENT_PREFIX}This reads like a factual claim, but nothing you've read supports it yet.` +
+    (nearest ? ` Closest in your reading: ${nearest}.` : ""));
+  await context.sync();
+}
+
 function comments(match) {
   const notes = [];
   if (match.label === "contradicts") {
@@ -562,6 +582,17 @@ function comments(match) {
   }
   if (match.too_close) {
     notes.push("Very close to the source's wording. Consider quoting it or rephrasing.");
+  }
+  for (const change of (match.changes || []).slice(0, 3)) {
+    notes.push(change.wrote && change.source ? `You quoted "${change.wrote}"; the source says "${change.source}".`
+      : change.wrote ? `"${change.wrote}" isn't in the source's wording.` : `You left out "${change.source}".`);
+  }
+  for (const n of match.wrong_numbers || []) notes.push(`"${n}" doesn't appear in the source. Check the figure.`);
+  if (match.together_with) notes.push(`This claim combines two sources: also cite ${cleanTitle(match.together_with.source?.title)}.`);
+  if (match.mixed) notes.push(`Mixed evidence: ${cleanTitle(match.mixed.title)} points the other way.`);
+  const published = parseInt(String(match.source?.date || ""), 10);
+  if (match.label === "supports" && published && new Date().getFullYear() - published > OLD_SOURCE_YEARS) {
+    notes.push(`This source is from ${published}. Check whether newer evidence agrees.`);
   }
   return notes.map((note) => COMMENT_PREFIX + note);
 }
@@ -644,7 +675,17 @@ async function check(scope, force, automatic = false) {
         const match = matches[i];
         if (!match) continue; // request failed: leave it unchecked so it's tried again next time
         checked.add(sentenceKey(sentences[i].sentence));
-        if (!match.match) continue;
+        if (!match.match) {
+          if (match.needs_source) {
+            try {
+              await noteNeedsSource(context, sentences[i], match.closest || []);
+              warnings++;
+            } catch (error) {
+              console.warn("Referee couldn't add a needs-a-source comment:", error);
+            }
+          }
+          continue;
+        }
 
         try {
           // The citation goes before the sentence's closing punctuation, so search for the

@@ -17,6 +17,7 @@ from store import add_page, clear, forget, search, sources
 from verify import verify
 from claims import needs_source
 from feedback import FeedbackModel
+from claim_log import ClaimLog
  
 # Minimum similarity score before a passage is sent to Claude at all.
 # Set this from the scores load_demo.py prints for your real demo sources.
@@ -24,6 +25,7 @@ MIN_SCORE = 0.5
 CLOSEST_SCORE = 0.3  # loosely related reading worth suggesting for an unsupported claim
 
 feedback = FeedbackModel(Path(__file__).with_name("feedback.json"))
+claim_log = ClaimLog(Path(__file__).with_name("claims.json"))
 
 
 class WritingSession:
@@ -213,7 +215,8 @@ def check(req: CheckRequest):
         return unsupported
     if not feedback.should_show(verdict):  # this person keeps rejecting markers like this
         return {"match": False}
-    # verdict includes "label": "supports" or "contradicts" - the editor must handle both
+    claim_log.record(sentence, verdict, req.project or None)  # for the library and proof of work
+    # verdict includes "label": "supports" or "contradicts" - Word and Obsidian handle both
     return {"match": True, **verdict}
  
  
@@ -257,12 +260,19 @@ def list_sources():
 
 @app.delete("/sources")
 def forget_source(url: str):
+    claim_log.forget(url)
     return {"ok": True, "removed": forget(url)}
+
+
+@app.get("/claims")
+def list_claims(project: str = ""):
+    return claim_log.claims(project or None)
 
 
 @app.post("/clear")
 def clear_store():
     clear()
+    claim_log.clear()
     return {"ok": True}
  
  

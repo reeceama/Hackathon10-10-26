@@ -33,7 +33,11 @@ const CAPTURE_STATUS = {
 
 // The pages Referee has captured, most recent first, filtered by the search box.
 async function showSaved() {
-  const { captures = [], cited = [] } = await chrome.storage.local.get(["captures", "cited"]);
+  const { captures = [] } = await chrome.storage.local.get("captures");
+  // Sources that have backed a claim in Word or Obsidian, from the server's claim log.
+  const claims = await chrome.runtime.sendMessage({ type: "get", path: "claims" }).catch(() => []);
+  const cited = Array.isArray(claims)
+    ? claims.filter((c) => c.label === "supports").map((c) => c.source?.url).filter(Boolean) : [];
   const query = searchBox.value.trim().toLowerCase();
   const shown = captures.filter((c) => !query || `${c.title} ${c.url} ${c.project || ""}`.toLowerCase().includes(query));
   savedList.replaceChildren(...shown.slice(0, 30).map((c) => {
@@ -145,8 +149,8 @@ mode.addEventListener("change", () => {
   showModeHint();
 });
 
-document.getElementById("open-editor").addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("editor/editor.html") });
+document.getElementById("open-library").addEventListener("click", () => {
+  chrome.tabs.create({ url: chrome.runtime.getURL("library/library.html") });
   window.close();
 });
 
@@ -156,7 +160,7 @@ document.getElementById("forget").addEventListener("click", async () => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && (changes.captures || changes.cited)) showSaved();
+  if (area === "local" && changes.captures) showSaved();
 });
 
 showStatus().then(showModeHint);

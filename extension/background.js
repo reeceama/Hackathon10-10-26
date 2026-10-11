@@ -1,5 +1,5 @@
 // Background service worker: talks to the backend, runs research mode and keeps a log of
-// captured pages for the popup. Pages and the editor send messages here rather than calling
+// captured pages for the popup. Pages and the library send messages here rather than calling
 // localhost themselves, which Chrome would block from ordinary web pages.
 
 importScripts("skip.js");
@@ -47,6 +47,13 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       .then((response) => response.json())
       .then((result) => reply(Boolean(result.active)))
       .catch(() => reply(false));
+    return true;
+  }
+  if (message.type === "get") {  // the library reads /sources and /claims
+    fetch(`${SERVER}/${message.path}`, { headers: HEADERS, cache: "no-store" })
+      .then((response) => response.json())
+      .then(reply)
+      .catch((error) => reply({ error: String(error) }));
     return true;
   }
   if (message.type === "setResearch") {
@@ -97,7 +104,7 @@ const pdfTimers = new Map(); // tab id -> timer
 const pdfsSent = new Set();  // URLs already sent this session
 
 // Research mode on, a macOS Focus has switched it on through the server, or (automatic
-// mode only) Word, Obsidian or the editor reports someone writing.
+// mode only) Word or Obsidian reports someone writing.
 async function capturing() {
   const { research, mode } = await chrome.storage.local.get(["research", "mode"]);
   if (research) return true;

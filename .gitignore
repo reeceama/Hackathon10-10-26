@@ -10,6 +10,7 @@ __pycache__/
 store.json
 store.npy
 feedback.json
+claims.json
 
 # Evaluation outputs
 server/eval_*.csv

@@ -1,3 +1,6 @@
+// Developer test page, not linked from anywhere a user sees. Open it at
+// chrome-extension://<extension id>/dev/editor/editor.html to try checks quickly without Word.
+
 // Editor: checks each finished sentence against the backend and shows the results as
 // highlights in the text and cards in the margin. Dismissing a card or opening its
 // source is reported to /feedback, so the backend learns what this person finds useful.

@@ -1,6 +1,6 @@
 # Referee
 
-Referee checks your writing against the sources you have read. A browser extension quietly captures the articles, PDFs and YouTube videos you read while researching, and as you write in its editor, Word or Obsidian, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
+Referee checks your writing against the sources you have read. A browser extension quietly captures the articles, PDFs and YouTube videos you read while researching, and as you write in Word or Obsidian, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
 
 It never writes for you. It only checks, credits and warns.
 
@@ -24,7 +24,7 @@ Built in one day for the Invisible AI hackathon on 10 October 2026, where the br
 
 ## 1. What it does
 
-**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default capture runs only while you're writing in the editor, Word or Obsidian; it can also be switched on by hand, with a timer that switches it off again.
+**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default capture runs only while you're writing in Word or Obsidian, or while a macOS Focus is on; it can also be switched on by hand, with a timer that switches it off again.
 
 Reading can be tagged with a project, so each piece of writing is only checked against its own research. The popup lists everything captured, shows which sources the current piece cites, and lets you forget a single source or have reading expire after 7, 14 or 30 days.
 
@@ -40,9 +40,9 @@ Banking, payment, login and account pages, email, social media, search results a
 | Too close | Wording copied from a source without quotation marks. |
 | Needs a source | Reads like a factual claim, but nothing you read supports it. The closest sources you've read are suggested as places to look. |
 
-Cards also warn when a figure in the sentence isn't in the source, show exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. An evidence map shows at a glance how much of the piece is backed by the reading, and flags leaning heavily on one source.
+Referee also warns when a figure in the sentence isn't in the source, show exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. The library summarises how many claims your reading backs, and flags leaning heavily on one source.
 
-Each supported claim has a one-click citation in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos, and the editor keeps the reference list up to date. In Word, sources go into Word's own source manager, citations and bibliography, so they can be edited with Word's References tools. A proof-of-work report lists what you read, when, and which claims it backs.
+In Word, supported claims get citations and a reference list through Word's own source manager, so they can be edited with Word's References tools, and warnings appear as comments. The extension's library lists everything you've read, which sources your writing cites, and the reference list in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
 
 If a sentence makes no claim and nothing you read relates to it, Referee stays silent rather than guessing.
 
@@ -51,7 +51,7 @@ If a sentence makes no claim and nothing you read relates to it, Referee stays s
 ## 2. How it works
 
 ```
-Browser extension ──capture──▶ Backend (your laptop) ◀──check── Editor, Word, Obsidian
+Browser extension ──capture──▶ Backend (your laptop) ◀──check── Word, Obsidian
                                 │
                                 ├─ extract.py    article text → overlapping passages
                                 ├─ pdf.py        PDF text, with page numbers
@@ -139,7 +139,7 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 - **Scanned PDFs and videos without captions can't be read.** Spoken transcripts also match written sentences less closely than articles do.
 - **The extra checks are rules of thumb.** Whether a sentence needs a source, and what counts as an old source or over-reliance, are simple rules, not evaluated models.
 - **Author metadata is unreliable.** Many pages don't publish a usable author, so the organisation is used instead.
-- **Learning starts from very little.** With only a handful of events the model is easily swayed, which is why it falls back to the evaluated threshold until it has seen both outcomes. The editor doesn't report "ignored" markers: with an invisible tool, leaving a correct marker alone is the normal case, so it isn't evidence the marker was unhelpful.
+- **Learning starts from very little.** With only a handful of events the model is easily swayed, which is why it falls back to the evaluated threshold until it has seen both outcomes. Referee doesn't report "ignored" markers: with an invisible tool, leaving a correct marker alone is the normal case, so it isn't evidence the marker was unhelpful.
 - **The skip list is a list.** It covers major banks, payment, login and account pages, but it can't name every private site. The password-box rule catches most of the rest.
 
 ## 6. Repository layout
@@ -156,6 +156,7 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── claims.py               does a sentence need a source?
 │   ├── verify.py               claim verification, quote, figure and copying checks
 │   ├── feedback.py             learns which markers each person finds useful
+│   ├── claim_log.py            claims each source has backed, for the library
 │   ├── eval_scifact.py         verifier evaluation on SciFact
 │   ├── eval_wording.py         copying detection calibration
 │   ├── load_demo.py            preloads demo sources
@@ -168,7 +169,8 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── content.js              captures article pages once they've been read
 │   ├── skip.js                 pages that are never captured
 │   ├── popup/                  research mode, projects, captured reading
-│   ├── editor/                 writing page, source cards, citation styles
+│   ├── library/                captured reading, references, proof of work
+│   ├── dev/editor/             developer test page for checks (not user facing)
 │   └── icons/
 │
 ├── word-addin/                 Word add-in
@@ -211,7 +213,7 @@ To have the server and the Word add-in's HTTPS server start whenever you log in,
 
 To switch research mode on with a macOS Focus, create two automations in the Shortcuts app: when the Focus turns on, run the shell script `curl -s -X POST localhost:8000/focus -H 'Content-Type: application/json' -d '{"on":true}'`, and when it turns off, the same with `false`.
 
-To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. Open the editor from the popup and start writing, then read some sources; anything you read while writing is captured. For Obsidian, copy `obsidian-plugin/` into your vault as `.obsidian/plugins/referee/` and enable it under Community plugins. API docs are at http://localhost:8000/docs while the backend is running.
+To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. Start writing in Word and read some sources; anything you read while writing is captured. Open the library from the popup to see your reading and references. For Obsidian, copy `obsidian-plugin/` into your vault as `.obsidian/plugins/referee/` and enable it under Community plugins. API docs are at http://localhost:8000/docs while the backend is running.
 
 ## 8. API
 
@@ -222,6 +224,8 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `POST /capture-video` | `{url, project}` | `{ok, passages}` |
 | `POST /check` | `{sentence, project}` | `{match: false, needs_source, closest}` or `{match: true, label, quote, source, passage, page, time, confidence, score, misquote, too_close, changes, wrong_numbers, mixed, together_with}` |
 | `GET /sources`, `DELETE /sources?url=` | | lists captured sources, or forgets one |
+| `GET /claims?project=` | | claims the reading has backed or contradicted, oldest first |
+| `POST /focus` | `{on}` | switches research mode on or off (macOS Focus) |
 | `POST /feedback` | `{event, sentence, url, label, confidence, score}` | `{ok}` |
 | `GET /feedback` | | what the model has learned so far |
 | `POST /feedback/reset` | | clears learned behaviour |
