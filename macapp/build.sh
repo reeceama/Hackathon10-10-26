@@ -47,6 +47,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - "$APP" >/dev/null 2>&1
+[ "$1" = "--no-install" ] && exit 0  # package.sh builds the app without installing it
 rm -rf /Applications/Referee.app "$HOME/Applications/Referee.app"  # older builds went in ~/Applications
 cp -R "$APP" /Applications/
 # Tell Launch Services and Spotlight about it, so it shows in Applications and search straight away.

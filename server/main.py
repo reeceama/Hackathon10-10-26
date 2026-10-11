@@ -19,6 +19,7 @@ from reading import ReadingSettings
 from verify import verify
 from claims import needs_source
 from feedback import FeedbackModel
+import paths
 import api_key
 from claim_log import ClaimLog
  
@@ -27,9 +28,9 @@ from claim_log import ClaimLog
 MIN_SCORE = 0.5
 CLOSEST_SCORE = 0.3  # loosely related reading worth suggesting for an unsupported claim
 
-feedback = FeedbackModel(Path(__file__).with_name("feedback.json"))
-claim_log = ClaimLog(Path(__file__).with_name("claims.json"))
-reading = ReadingSettings(Path(__file__).with_name("reading.json"))
+feedback = FeedbackModel(paths.data("feedback.json"))
+claim_log = ClaimLog(paths.data("claims.json"))
+reading = ReadingSettings(paths.data("reading.json"))
 
 
 def forget_expired_reading():

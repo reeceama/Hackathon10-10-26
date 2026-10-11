@@ -13,12 +13,25 @@ final class Services {
         self.repo = repo
     }
 
+    /// The downloadable app carries its own Python and Referee's code in Resources; a build from
+    /// the code folder uses that folder's .venv instead.
+    static var bundled: URL? {
+        guard let resources = Bundle.main.resourceURL else { return nil }
+        let code = resources.appendingPathComponent("referee")
+        return FileManager.default.fileExists(atPath: code.appendingPathComponent("referee.py").path) ? resources : nil
+    }
+
     func startAll() {
         stopping = false
         let process = Process()
-        process.executableURL = repo.appendingPathComponent(".venv/bin/python")
+        if let resources = Services.bundled {
+            process.executableURL = resources.appendingPathComponent("python/bin/python3")
+            process.currentDirectoryURL = resources.appendingPathComponent("referee")
+        } else {
+            process.executableURL = repo.appendingPathComponent(".venv/bin/python")
+            process.currentDirectoryURL = repo
+        }
         process.arguments = ["referee.py"]
-        process.currentDirectoryURL = repo
         process.terminationHandler = { [weak self] _ in
             DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
                 guard let self, !self.stopping else { return }

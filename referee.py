@@ -35,7 +35,7 @@ def parts():
     found = [("server", "server", ["-m", "uvicorn", "main:app", "--port", "8000"])]
     if sys.platform in ("darwin", "win32"):
         found.append(("helper", "word-helper", ["helper.py"]))
-    if (Path.home() / ".office-addin-dev-certs" / "localhost.crt").exists():
+    if (REPO / "word-addin").exists() and (Path.home() / ".office-addin-dev-certs" / "localhost.crt").exists():
         found.append(("word", "word-addin", ["server.py"]))
     return found
 

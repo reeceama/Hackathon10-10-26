@@ -12,6 +12,7 @@ import anthropic
 from pydantic import BaseModel
 
 import api_key
+import paths
 
 
 class Client:
@@ -121,7 +122,7 @@ class VerdictCache:
             Path(self.path).write_text(json.dumps(items), encoding="utf-8")
 
 
-cache = VerdictCache(path=Path(__file__).with_name("verdicts.json"))
+cache = VerdictCache(path=paths.data("verdicts.json"))
 
 
 def call_llm(system, user, use_cache=True):

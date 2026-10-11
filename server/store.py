@@ -5,11 +5,12 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
+import paths
 from embeddings import embed
 from keywords import KeywordIndex
 
-DATA_FILE = "store.json"
-VECTOR_FILE = "store.npy"
+DATA_FILE = str(paths.data("store.json"))
+VECTOR_FILE = str(paths.data("store.npy"))
 
 _passages: List[Dict] = []          # {"text": ..., "source": {...}}
 _vectors: Optional[np.ndarray] = None

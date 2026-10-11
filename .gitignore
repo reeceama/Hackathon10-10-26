@@ -25,3 +25,5 @@ Thumbs.db
 
 # Built app
 macapp/build/
+macapp/dist/
+macapp/build-cache/

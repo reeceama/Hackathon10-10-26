@@ -12,9 +12,12 @@ import anthropic
 import keyring
 from dotenv import load_dotenv
 
+import paths
+
 SERVICE, ACCOUNT = "Referee", "anthropic-api-key"
 
-load_dotenv()
+load_dotenv()                     # server/.env, when running from the code folder
+load_dotenv(paths.data(".env"))   # or a .env in Referee's data folder
 
 
 def get() -> Optional[str]:

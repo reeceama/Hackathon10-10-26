@@ -159,7 +159,9 @@ enum Library {
     static let browsers = [("BraveSoftware/Brave-Browser", "Brave Browser"), ("Google/Chrome", "Google Chrome"), ("Chromium", "Chromium")]
 
     static func open(repo: URL) {
-        let extensionDir = repo.appendingPathComponent("extension").path
+        // The extension may be loaded from the app's own copy or from the code folder.
+        let folders = [Services.bundled?.appendingPathComponent("extension").path, repo.appendingPathComponent("extension").path]
+            .compactMap { $0?.trimmingCharacters(in: CharacterSet(charactersIn: "/")) }
         let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
         for (folder, app) in browsers {
             let base = support.appendingPathComponent(folder)
@@ -172,7 +174,7 @@ enum Library {
                           let settings = (json["extensions"] as? [String: Any])?["settings"] as? [String: Any] else { continue }
                     for (id, info) in settings {
                         let path = ((info as? [String: Any])?["path"] as? String ?? "").trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                        if path == extensionDir.trimmingCharacters(in: CharacterSet(charactersIn: "/")) {
+                        if folders.contains(path) {
                             let url = "chrome-extension://\(id)/library/library.html"
                             let task = Process()
                             task.executableURL = URL(fileURLWithPath: "/usr/bin/open")

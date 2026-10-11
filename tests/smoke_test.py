@@ -41,6 +41,7 @@ def server_parts():
     work = Path(tempfile.mkdtemp())
     shutil.copytree(REPO / "server", work / "server", ignore=shutil.ignore_patterns(
         "store.json", "store.npy", "claims.json", "reading.json", "feedback.json", ".env", "eval_*", "__pycache__"))
+    os.environ["REFEREE_DATA"] = str(work / "data")  # never touch real reading
     os.chdir(work / "server")
     sys.path.insert(0, str(work / "server"))
     from fastapi.testclient import TestClient
@@ -59,7 +60,7 @@ def server_parts():
     check("Save for later keeps it", client.get("/sources", headers=headers).json()[0]["kept"] is True)
     name = "Café dissertation ✓"
     client.post("/settings", json={"project": name}, headers=headers)
-    check("project names survive a restart", json.loads((work / "server" / "reading.json").read_text(encoding="utf-8"))["project"] == name)
+    check("project names survive a restart", json.loads((work / "data" / "reading.json").read_text(encoding="utf-8"))["project"] == name)
     check("other websites are refused", client.get("/sources", headers={"Origin": "https://example.com"}).status_code == 403)
     rejected = client.post("/api-key", json={"key": "sk-ant-not-a-real-key"}, headers=headers).json()
     check("a wrong API key is rejected, not saved", rejected.get("ok") is False)
