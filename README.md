@@ -66,7 +66,7 @@ Browser extension ──capture──▶ Backend (your laptop) ◀──check─
 
 **Capture.** The extension sends each article page to a local backend, which extracts the article text with trafilatura, strips references and citation clutter, and splits it into short overlapping passages.
 
-**Search.** Passages are embedded with a small sentence-transformer model that runs on your own machine. A finished sentence is embedded the same way and compared by cosine similarity, and a BM25 keyword search runs alongside it, since meaning-based search can blur exact names and figures. The two rankings are combined by reciprocal rank fusion, and the top five passages are taken forward, provided they clear a minimum similarity. If none do, nothing is sent anywhere.
+**Search.** Passages are embedded with a small sentence-embedding model that runs on your own machine. A finished sentence is embedded the same way and compared by cosine similarity, and a BM25 keyword search runs alongside it, since meaning-based search can blur exact names and figures. The two rankings are combined by reciprocal rank fusion, and the top five passages are taken forward, provided they clear a minimum similarity. If none do, nothing is sent anywhere.
 
 **Verify.** Claude decides whether any of those passages supports or contradicts the specific claim, or neither. Being on the same topic is not support, and the strength of a claim counts, so "strongly linked" is contradicted by a source that finds only a weak link. The reply is constrained to a fixed schema with structured outputs. The quote it returns must be at least four words and appear in the passage (ignoring differences in spacing, capitals and curly quotes), otherwise nothing is shown. Calls time out after 10 seconds, and failures are logged. Verdicts are cached, so re-checking the same sentence against the same passages costs nothing.
 
@@ -82,7 +82,7 @@ Browser extension ──capture──▶ Backend (your laptop) ◀──check─
 |---|---|
 | SciFact | 1,409 scientific claims with labelled evidence from 5,183 abstracts, used to evaluate the verifier |
 | trafilatura | Article text extraction from captured pages |
-| all-MiniLM-L6-v2 | Local sentence embeddings for search |
+| all-MiniLM-L6-v2 (ONNX) | Local sentence embeddings for search, run with ONNX Runtime |
 | Claude Haiku 5.5 | Claim verification, through the Anthropic API |
 | Wikipedia, NHS and BBC pages | Captured during development and used for the wording calibration |
 
@@ -145,6 +145,8 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 ## 6. Repository layout
 
 ```
+├── referee.py                  starts and watches the background parts (macOS and Windows)
+├── tests/smoke_test.py         checks the background parts work, run by GitHub on Windows and macOS
 ├── server/                     backend, runs locally
 │   ├── main.py                 API routes
 │   ├── extract.py              article text and passages
@@ -198,7 +200,11 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ```bash
-# start the backend (the first run downloads the embedding model)
+# start everything: the server, the Word helper and (with its certificates) the Word add-in's
+# server. The first run downloads the embedding model (about 90 MB).
+python referee.py
+
+# or just the server
 cd server
 uvicorn main:app --port 8000
 
