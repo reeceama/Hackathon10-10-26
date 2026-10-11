@@ -553,12 +553,53 @@ struct WindowGlass: NSViewRepresentable {
 /// The repository this app was built from: its Python parts and the extension folder.
 let repository = URL(fileURLWithPath: Bundle.main.object(forInfoDictionaryKey: "RefereeRepository") as? String ?? "")
 
+/// Hands the app delegate a way to open the settings window. It lives in the menu bar label
+/// because SwiftUI only gives window-opening to views, and the label always exists.
+struct SettingsOpener: View {
+
+    @Environment(\.openWindow) private var openWindow
+
+    var body: some View {
+        Color.clear.frame(width: 0, height: 0).onAppear {
+            openSettings = {
+                openWindow(id: "settings")
+                NSApp.activate(ignoringOtherApps: true)
+            }
+        }
+    }
+}
+
+/// Opens the settings window; set by the menu bar label, which SwiftUI keeps alive.
+@MainActor var openSettings: (() -> Void)?
+
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
     let services: Services? = Services(repo: repository)
+    private var openedAtLogin = false
+
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        // Started by macOS at login: stay in the menu bar. Opened by the person: show settings.
+        let event = NSAppleEventManager.shared().currentAppleEvent
+        openedAtLogin = event?.eventID == AEEventID(kAEOpenApplication)
+            && event?.paramDescriptor(forKeyword: AEKeyword(keyAEPropData))?.enumCodeValue == AEEventClass(keyAELaunchedAsLogInItem)
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         services?.startAll()
+        if !openedAtLogin { showSettingsWhenReady(attempts: 20) }
+    }
+
+    /// The menu bar label sets up openSettings shortly after launch; wait for it.
+    private func showSettingsWhenReady(attempts: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            if let open = openSettings { open() } else if attempts > 0 { self.showSettingsWhenReady(attempts: attempts - 1) }
+        }
+    }
+
+    // Clicking the app's icon again (in Applications, Spotlight or Launchpad) opens settings.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openSettings?()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -579,6 +620,7 @@ struct RefereeApp: App {
         } label: {
             // The whistle: filled while capturing, an outline when idle.
             Image(nsImage: icon(model.capturing ? "whistleOnTemplate" : "whistleOffTemplate"))
+                .background(SettingsOpener())
             if !model.online { Text("⚠︎") }
         }
         Window("New Project", id: "new-project") {

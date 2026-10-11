@@ -1,5 +1,5 @@
 #!/bin/sh
-# Builds Referee.app (the menu bar app) and installs it in ~/Applications.
+# Builds Referee.app (the menu bar app) and installs it in /Applications.
 # Needs the Xcode command line tools. Run from anywhere: sh macapp/build.sh
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -47,7 +47,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 
 codesign --force --sign - "$APP" >/dev/null 2>&1
-mkdir -p "$HOME/Applications"
-rm -rf "$HOME/Applications/Referee.app"
-cp -R "$APP" "$HOME/Applications/"
-echo "Installed $HOME/Applications/Referee.app"
+rm -rf /Applications/Referee.app "$HOME/Applications/Referee.app"  # older builds went in ~/Applications
+cp -R "$APP" /Applications/
+# Tell Launch Services and Spotlight about it, so it shows in Applications and search straight away.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f /Applications/Referee.app
+mdimport /Applications/Referee.app 2>/dev/null || true
+echo "Installed /Applications/Referee.app"
