@@ -2,7 +2,7 @@
 
 <h1 align="center">Referee</h1>
 
-Referee checks your writing against the sources you have read. A browser extension quietly captures the articles, PDFs and YouTube videos you read while researching, and as you write in Word, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
+Referee checks your writing against the sources you have read. You add the articles, PDFs and YouTube videos you'll cite, or a browser extension collects what you read while researching, and as you write in Word, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
 
 It never writes for you. It only checks, credits and warns.
 
@@ -17,7 +17,7 @@ Built in one day for the Invisible AI hackathon on 10 October 2026, where the br
 3. In Referee's settings, paste your [Anthropic API key](https://console.anthropic.com). It's kept in your Keychain.
 4. Add the sources you'll cite with **Add Source…** in the menu bar, or choose **Install Browser Extension…** to collect what you read automatically.
 
-Referee checks your writing as you type in Word. There's no Windows app yet; Windows users can run it from the code (see [Running it](#7-running-it)).
+Referee checks your writing as you type in Word, and updates itself when a new release comes out. There's no Windows app yet; Windows users can run it from the code (see [Running it](#7-running-it)).
 
 ## Team members
 
@@ -38,9 +38,9 @@ Referee checks your writing as you type in Word. There's no Windows app yet; Win
 
 ## 1. What it does
 
-**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default capture runs only while you're writing in Word, or while a macOS Focus is on; it can also be switched on by hand, with a timer that switches it off again.
+**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default the extension captures only while you're writing in Word (and for five minutes after), or while research mode is on: switched on from the menu bar or the popup, or by a macOS Focus once two Shortcuts automations are set up (see [Running it](#7-running-it)). Sources can also be added by hand with **Add Source** in the menu bar: a link to a page, PDF or YouTube video, or a PDF on your Mac.
 
-Captured reading is temporary: it can be cited straight away, and is forgotten after 15 minutes (or an hour, or a day) unless you keep it. **Save for later** in the popup keeps the page you're on, whether or not it was captured, and any source your writing cites is kept automatically. Kept sources belong to the current project, chosen or created in the popup. Projects are kept apart: writing is only checked against its own project's sources, plus any other projects you link it to in the library, where sources can also be moved between projects. Referee never runs in private (Incognito) windows. The popup lists your reading, saved or temporary, and lets you forget any source.
+Captured reading is temporary: it can be cited straight away, and is forgotten after 15 minutes (or an hour, or a day) unless you keep it. **Save for later** in the extension's popup keeps the page you're on, whether or not it was captured; sources added by hand are kept straight away, and any source your writing cites is kept automatically. Kept sources belong to the current project, chosen or created from the menu bar, the library or the popup. Projects are kept apart: writing is only checked against its own project's sources, plus any other projects you link it to in the library, where sources can also be moved between projects. The extension never runs in private (Incognito) windows. The library lists your reading, saved or temporary, and lets you save, move or forget any source.
 
 Banking, payment, login and account pages, email, social media, search results and writing tools are never captured, nor is any page with a password box. Before a page leaves the browser tab, every form field, text box and script is removed, so nothing anyone typed is sent.
 
@@ -54,18 +54,18 @@ Banking, payment, login and account pages, email, social media, search results a
 | Too close | Wording copied from a source without quotation marks. |
 | Needs a source | Reads like a factual claim, but nothing you read supports it. The closest sources you've read are suggested as places to look. |
 
-Referee also warns when a figure in the sentence isn't in the source, show exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. The library summarises how many claims your reading backs, and flags leaning heavily on one source.
+Referee also warns when a figure in the sentence isn't in the source, shows exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. The library summarises how many claims your reading backs, and flags leaning heavily on one source.
 
-In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are highlighted and cited, a reference list is kept at the end, and warnings become comments. The Word add-in does the same from a panel, and stands down while the helper runs; it adds citations and a reference list through Word's own source manager, so they can be edited with Word's References tools, and warnings appear as comments. The extension's library lists everything you've read, which sources your writing cites, and the reference list in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
+In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are highlighted and cited, a reference list is kept at the end, and warnings become comments. The Word add-in does the same from a panel, and stands down while the helper runs; it adds citations and a reference list through Word's own source manager, so they can be edited with Word's References tools, and warnings appear as comments. The library, a window in Referee for Mac (and a page in the extension), lists everything you've read, manages projects, and gives the reference list for what you've cited in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
 
 If a sentence makes no claim and nothing you read relates to it, Referee stays silent rather than guessing.
 
-**It learns from behaviour.** Dismissing a marker or opening its source is recorded, and Referee learns which kinds of marker each person finds useful, then stops showing the ones they keep rejecting. There is nothing to configure.
+**Learning from behaviour (not yet active in Word).** The server can learn which kinds of marker a person finds useful from what they do with them, such as dismissing a marker or opening its source, and stop showing the ones they keep rejecting. The Word helper doesn't report those actions yet, so in everyday use every marker the verifier accepts is shown.
 
 ## 2. How it works
 
 ```
-Browser extension ──capture──▶ Backend (your laptop) ◀──check── Word
+Browser extension, Add Source ──capture──▶ Backend (your laptop) ◀──check── Word
                                 │
                                 ├─ extract.py    article text → overlapping passages
                                 ├─ pdf.py        PDF text, with page numbers
@@ -78,7 +78,7 @@ Browser extension ──capture──▶ Backend (your laptop) ◀──check─
                                 └─ feedback.py   learns which markers each person finds useful
 ```
 
-**Capture.** The extension sends each article page to a local backend, which extracts the article text with trafilatura, strips references and citation clutter, and splits it into short overlapping passages.
+**Capture.** The extension sends each article page to a local backend (or Add Source fetches a page, PDF or video by its link), which extracts the article text with trafilatura, strips references and citation clutter, and splits it into short overlapping passages.
 
 **Search.** Passages are embedded with a small sentence-embedding model that runs on your own machine. A finished sentence is embedded the same way and compared by cosine similarity, and a BM25 keyword search runs alongside it, since meaning-based search can blur exact names and figures. The two rankings are combined by reciprocal rank fusion, and the top five passages are taken forward, provided they clear a minimum similarity. If none do, nothing is sent anywhere.
 
@@ -153,7 +153,8 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 - **Scanned PDFs and videos without captions can't be read.** Spoken transcripts also match written sentences less closely than articles do.
 - **The extra checks are rules of thumb.** Whether a sentence needs a source, and what counts as an old source or over-reliance, are simple rules, not evaluated models.
 - **Author metadata is unreliable.** Many pages don't publish a usable author, so the organisation is used instead.
-- **Learning starts from very little.** With only a handful of events the model is easily swayed, which is why it falls back to the evaluated threshold until it has seen both outcomes. Referee doesn't report "ignored" markers: with an invisible tool, leaving a correct marker alone is the normal case, so it isn't evidence the marker was unhelpful.
+- **Learning isn't fed by Word yet.** The usefulness model only learns from actions the apps report, and the Word helper doesn't report any yet. With only a handful of events the model would be easily swayed anyway, which is why it falls back to the evaluated threshold until it has seen both outcomes.
+- **Word citations are plain text.** The Word helper types citations and the reference list rather than using Word's citation fields, and adds new references to the end of the list rather than sorting them in. Sentences in tables or next to Word fields may be skipped rather than risk marking the wrong text.
 - **The skip list is a list.** It covers major banks, payment, login and account pages, but it can't name every private site. The password-box rule catches most of the rest.
 
 ## 6. Repository layout
@@ -163,6 +164,8 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 ├── tests/smoke_test.py         checks the background parts work, run by GitHub on Windows and macOS
 ├── server/                     backend, runs locally
 │   ├── main.py                 API routes
+│   ├── paths.py                where your data is kept (Application Support, or %LOCALAPPDATA%)
+│   ├── api_key.py              your Anthropic API key, in Keychain or Credential Manager
 │   ├── extract.py              article text and passages
 │   ├── pdf.py                  PDF text and page numbers
 │   ├── video.py                YouTube transcripts and timestamps
@@ -174,7 +177,8 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── feedback.py             learns which markers each person finds useful
 │   ├── claim_log.py            claims each source has backed, for the library
 │   ├── reading.py              projects, and how long unsaved reading is kept
-│   ├── citations.py            citation styles for the Word helper
+│   ├── citations.py            citation styles, for the Word helper and the library
+│   ├── library.py              reference lists and the proof-of-work report
 │   ├── eval_scifact.py         verifier evaluation on SciFact
 │   ├── eval_wording.py         copying detection calibration
 │   ├── load_demo.py            preloads demo sources
@@ -191,11 +195,19 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── dev/editor/             developer test page for checks (not user facing)
 │   └── icons/
 │
-├── macapp/                     Referee for Mac: menu bar app that runs the server and Word helper
+├── macapp/                     Referee for Mac: menu bar app, library, settings and updates
+│   ├── Sources/                the app, in Swift
+│   ├── build.sh                builds it from this folder into /Applications
+│   ├── package.sh              builds the downloadable app, with its own Python
+│   └── make_icon.py            draws the app and extension icons
 ├── word-helper/                background Word helper (AppleScript on macOS, COM on Windows)
 ├── word-addin/                 Word add-in (fallback)
+├── scripts/install-windows.bat starts Referee at login on Windows
+├── assets/                     README icon and link preview image
+├── .github/workflows/test.yml  runs the tests on Windows and macOS after every push
 │
 ├── README.md
+├── LICENSE
 └── .gitignore
 ```
 
@@ -232,7 +244,7 @@ python eval_scifact.py analyse
 python eval_wording.py
 ```
 
-On a Mac, `sh macapp/build.sh` builds **Referee.app** from this folder and installs it in `/Applications`; `sh macapp/package.sh` builds the downloadable version instead, with its own Python, code and libraries inside, as `macapp/dist/Referee-mac.zip` (Apple silicon). It lives in the menu bar (a whistle: outlined when idle, filled while capturing), runs the server, the Word helper and the Word add-in's HTTPS server while it's open, and has a settings window for the project, how long unsaved reading is kept, the citation style in Word and opening at login. On Windows, `scripts\install-windows.bat` starts the server and Word helper at login. `tests/smoke_test.py` checks the background parts work, without Word or an API key; GitHub runs it on Windows and macOS after every push. See `word-helper/README.md`.
+On a Mac, `sh macapp/build.sh` builds **Referee.app** from this folder and installs it in `/Applications`; `sh macapp/package.sh 2026-10-12` builds the downloadable version instead, named for its release, with its own Python, code and libraries inside, as `macapp/dist/Referee-mac.zip` and its checksum (Apple silicon); publish both as a GitHub release of the same name, and downloaded copies update themselves. The app lives in the menu bar (a whistle: outlined when idle, filled while capturing) and runs the server and the Word helper while it's open. Its menu has research mode, the current project, the citation style in Word, Add Source, the library, Install Browser Extension and settings (API key, how long unsaved reading is kept, opening at login). On Windows, `scripts\install-windows.bat` starts the server and Word helper at login. `tests/smoke_test.py` checks the background parts work, without Word or an API key; GitHub runs it on Windows and macOS after every push. See `word-helper/README.md`.
 
 To switch research mode on with a macOS Focus, create two automations in the Shortcuts app: when the Focus turns on, run the shell script `curl -s -X POST localhost:8000/focus -H 'Content-Type: application/json' -d '{"on":true}'`, and when it turns off, the same with `false`.
 
@@ -258,6 +270,13 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `POST /feedback/reset` | | clears learned behaviour |
 | `POST /writing`, `GET /writing` | | marks or reports an active writing session (automatic mode) |
 | `POST /clear` | | forgets all captured reading |
+| `POST /sources/add-url` | `{url}` | adds a page, PDF or YouTube video by its link, kept in the current project |
+| `POST /sources/add-pdf` | `{name, data}` (PDF as base64) | adds a PDF from this computer, kept in the current project |
+| `POST /sources/forget-temporary` | | forgets reading that hasn't been saved or cited |
+| `POST /projects/rename` | `{old, new}` | renames a project, or deletes it when `new` is empty (its sources stay) |
+| `GET /references?project=&style=` | | the reference list for what's been cited |
+| `GET /report?project=&style=` | | the proof-of-work report, as a web page |
+| `GET /api-key`, `POST /api-key`, `DELETE /api-key` | `{key}` | whether a key is saved; checks and saves one; removes it |
 
 `label` is `supports`, `contradicts` or `misquote`. Feedback events are `opened_source`, `edited_after`, `dismissed` and `ignored`.
 

@@ -282,6 +282,9 @@ struct MenuContent: View {
         Button("Open Library") { show("library") }
         Button("Settings…") { show("settings") }
             .keyboardShortcut(",")
+        if Updater.shared.current != nil {
+            Button("Check for Updates…") { Updater.shared.check(manually: true) }
+        }
         Divider()
         Button("Quit Referee") { NSApp.terminate(nil) }
             .keyboardShortcut("q")
@@ -717,6 +720,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         services?.startAll()
+        Updater.shared.start()
         if !openedAtLogin { showSettingsWhenReady(attempts: 20) }
     }
 
