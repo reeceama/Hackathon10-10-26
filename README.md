@@ -23,6 +23,7 @@ Built in one day for the Invisible AI hackathon on 10 October 2026, where the br
 6. [Repository layout](#6-repository-layout)
 7. [Running it](#7-running-it)
 8. [API](#8-api)
+9. [License](#9-license)
 
 ## 1. What it does
 
@@ -248,3 +249,7 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `POST /clear` | | forgets all captured reading |
 
 `label` is `supports`, `contradicts` or `misquote`. Feedback events are `opened_source`, `edited_after`, `dismissed` and `ignored`.
+
+## 9. License
+
+Code released under the [MIT License](LICENSE).

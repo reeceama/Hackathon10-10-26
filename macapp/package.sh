@@ -37,6 +37,7 @@ PY="$APP/Contents/Resources/python/bin/python3"
 CODE="$APP/Contents/Resources/referee"
 mkdir -p "$CODE/server" "$CODE/word-helper"
 cp "$REPO/referee.py" "$CODE/"
+cp "$REPO/LICENSE" "$APP/Contents/Resources/LICENSE"
 for f in "$REPO"/server/*.py; do case "$(basename "$f")" in eval_*|load_demo.py) ;; *) cp "$f" "$CODE/server/" ;; esac; done
 cp "$REPO"/word-helper/*.py "$CODE/word-helper/"
 cp -R "$REPO/extension" "$APP/Contents/Resources/extension"
