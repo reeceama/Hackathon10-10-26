@@ -1,5 +1,5 @@
 @echo off
-rem Starts the Referee server and the Word helper whenever you log in to Windows.
+rem Starts Referee (referee.py: the server and the Word helper) whenever you log in to Windows.
 rem Run once from the repository folder: scripts\install-windows.bat
 rem To remove: delete "Referee.vbs" from your Startup folder (Win+R, shell:startup).
 
@@ -14,10 +14,8 @@ if not exist "%PY%" (
 set VBS=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\Referee.vbs
 (
   echo Set shell = CreateObject^("WScript.Shell"^)
-  echo shell.CurrentDirectory = "%REPO%\server"
-  echo shell.Run """%PY%"" -m uvicorn main:app --port 8000", 0, False
-  echo shell.CurrentDirectory = "%REPO%\word-helper"
-  echo shell.Run """%PY%"" helper.py", 0, False
+  echo shell.CurrentDirectory = "%REPO%"
+  echo shell.Run """%PY%"" referee.py", 0, False
 ) > "%VBS%"
 
 wscript "%VBS%"

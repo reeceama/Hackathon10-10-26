@@ -1,11 +1,12 @@
 fastapi
 uvicorn
 trafilatura
-sentence-transformers
+onnxruntime
+tokenizers
+huggingface_hub
 numpy
 anthropic
 python-dotenv
 requests
-scikit-learn
 pypdf
 youtube-transcript-api

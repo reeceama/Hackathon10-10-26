@@ -14,9 +14,6 @@ import json
 from pathlib import Path
 
 import numpy as np
-from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
 
 MIN_EVENTS = 4
 SHOW_MIN = 0.5  # hide a marker when its predicted chance of being useful is below this
@@ -44,6 +41,42 @@ def features(marker):
     ]
 
 
+class LogisticModel:
+
+    """
+    Weighted logistic regression on standardised features, the same model as scikit-learn's
+    StandardScaler + LogisticRegression (L2 penalty with C=1, unpenalised intercept), fitted
+    by Newton's method. Written out in numpy so the server doesn't load scikit-learn (~90 MB)
+    for three features.
+    """
+
+    def fit(self, X, y, weights, iterations=50):
+
+        X, y, weights = np.asarray(X, float), np.asarray(y, float), np.asarray(weights, float)
+        self.mean = X.mean(axis=0)
+        self.scale = X.std(axis=0)
+        self.scale[self.scale == 0] = 1.0
+        Z = np.column_stack([np.ones(len(X)), (X - self.mean) / self.scale])
+        beta = np.zeros(Z.shape[1])
+        penalty = np.eye(Z.shape[1])
+        penalty[0, 0] = 0.0  # the intercept isn't penalised
+        for _ in range(iterations):
+            p = 1 / (1 + np.exp(-Z @ beta))
+            gradient = Z.T @ (weights * (p - y)) + penalty @ beta
+            hessian = (Z * (weights * p * (1 - p))[:, None]).T @ Z + penalty
+            step = np.linalg.solve(hessian, gradient)
+            beta -= step
+            if np.abs(step).max() < 1e-10:
+                break
+        self.intercept, self.coef = beta[0], beta[1:]
+        return self
+
+    def probability(self, x):
+
+        z = self.intercept + ((np.asarray(x, float) - self.mean) / self.scale) @ self.coef
+        return float(1 / (1 + np.exp(-z)))
+
+
 class FeedbackModel:
 
     """
@@ -69,8 +102,7 @@ class FeedbackModel:
             return
         X = np.array([features(e) for e in self.events])
         weights = [EVENTS[e["event"]][1] for e in self.events]
-        self.model = make_pipeline(StandardScaler(), LogisticRegression())
-        self.model.fit(X, useful, logisticregression__sample_weight=weights)
+        self.model = LogisticModel().fit(X, useful, weights)
 
     def record(self, event):
 
@@ -93,7 +125,7 @@ class FeedbackModel:
 
         if self.model is None:
             return None
-        return float(self.model.predict_proba([features(marker)])[0][1])
+        return self.model.probability(features(marker))
 
     def should_show(self, marker):
 
@@ -109,7 +141,7 @@ class FeedbackModel:
         counts = {name: sum(e["event"] == name for e in self.events) for name in EVENTS}
         if self.model is None:
             return {"events": len(self.events), "counts": counts, "learning": False}
-        weights = self.model.named_steps["logisticregression"].coef_[0]
+        weights = self.model.coef
         return {
             "events": len(self.events),
             "counts": counts,
