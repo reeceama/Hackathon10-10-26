@@ -117,6 +117,7 @@ function renderSources() {
         <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(Cite.cleanTitle(s))}</a>
         <div class="meta">${escapeHtml([s.site, read].filter(Boolean).join(" · "))}</div>
         <div class="tags">
+          ${s.retracted ? `<span class="tag retracted">Retracted</span>` : ""}
           <span class="tag ${s.kept === false ? "temp" : "cited"}">${s.kept === false ? "Temporary" : "Saved"}</span>
           <span class="tag">${type}</span>
           ${n ? `<span class="tag cited">Backs ${n} claim${n === 1 ? "" : "s"}</span>` : ""}

@@ -133,6 +133,8 @@ def notes_for(result: Dict) -> List[str]:
                 + (f" Closest in your reading: {closest}." if closest else "")]
     notes = []
     source = result.get("source") or {}
+    if source.get("retracted"):
+        notes.append("This paper has been retracted. Check the retraction notice before relying on it.")
     if result["label"] == "contradicts":
         notes.append(f"Your source says otherwise: \"{result.get('quote')}\" ({citations.clean_title(source)})")
     if result.get("misquote"):

@@ -35,7 +35,8 @@ const Cite = (() => {
   // Page metadata often has junk in the author field (Wikipedia's is a list of catalogue
   // names), so anything long or catalogue-like is treated as no author.
   function splitAuthors(author) {
-    if (!author || author.split(/\s+/).length > 8 || /databases|authority control/i.test(author)) return [];
+    if (!author || /databases|authority control/i.test(author)) return [];
+    if (!author.includes(";") && author.split(/\s+/).length > 8) return [];  // a semicolon-separated list (from a DOI) is genuine
     return author.split(/;|\band\b|&/).map((a) => a.trim()).filter(Boolean);
   }
 

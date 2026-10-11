@@ -16,6 +16,7 @@ import base64
 from extract import extract_page
 from pdf import extract_pdf
 from video import extract_video
+from metadata import enrich
 from store import add_page, clear, expired, forget, keep, move, rename_project, search, sources
 from reading import ReadingSettings
 from verify import verify
@@ -206,6 +207,7 @@ def capture(req: CaptureRequest):
         _, metadata, passages = extract_page(req.html, url=req.url)
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
+    enrich(metadata, req.html)  # exact details for academic pages, from their DOI
     stamp(metadata, req.project)
     added = add_page(metadata, passages)
     if added == 0:
@@ -221,6 +223,7 @@ def capture_pdf(req: CapturePdfRequest):
         return {"ok": False, "reason": str(e)}
     if req.title and not metadata.get("title"):
         metadata["title"] = req.title
+    enrich(metadata, " ".join(text for text, _ in passages[:5]))
     stamp(metadata, req.project)
     added = add_page(metadata, [text for text, _ in passages], pages=[page for _, page in passages])
     if added == 0:

@@ -278,6 +278,7 @@ struct LibraryView: View {
                 }
                 if !read.isEmpty { Text(read).font(.caption).foregroundStyle(.secondary) }
                 HStack(spacing: 6) {
+                    if source["retracted"] as? Bool == true { tag("Retracted", colour: .red) }
                     tag(temporary ? "Temporary" : "Saved", colour: temporary ? .orange : .green)
                     tag(type, colour: .secondary)
                     if backs > 0 { tag("Backs \(backs) claim\(backs == 1 ? "" : "s")", colour: .green) }

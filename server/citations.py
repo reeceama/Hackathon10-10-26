@@ -61,7 +61,9 @@ def _split_authors(author: Optional[str]) -> List[str]:
     names), so anything long or catalogue-like is treated as no author.
     """
 
-    if not author or len(author.split()) > 8 or re.search(r"databases|authority control", author, re.IGNORECASE):
+    if not author or re.search(r"databases|authority control", author, re.IGNORECASE):
+        return []
+    if ";" not in author and len(author.split()) > 8:  # a semicolon-separated list (from a DOI) is genuine
         return []
     return [a.strip() for a in re.split(r";|\band\b|&", author) if a.strip()]
 
