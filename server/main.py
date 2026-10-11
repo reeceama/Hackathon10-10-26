@@ -3,6 +3,7 @@ import time
 from datetime import date
 from pathlib import Path
 
+import requests
 import trafilatura
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -395,6 +396,45 @@ def clear_store():
     return {"ok": True}
  
  
+class AddPdfRequest(BaseModel):
+    name: str
+    data: str  # the PDF file, base64-encoded
+
+
+# --- Adding sources by hand (the Mac app's Add Source): saved straight into the current
+# project, so Referee works without the browser extension. ---
+@app.post("/sources/add-url")
+def add_url(req: CaptureUrlRequest):
+    url = req.url.strip()
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    if ("youtube.com/" in url or "youtu.be/" in url):
+        result = capture_video(CaptureVideoRequest(url=url))
+    elif url.lower().split("?")[0].endswith(".pdf"):
+        try:
+            data = requests.get(url, timeout=30).content
+        except requests.RequestException:
+            return {"ok": False, "reason": "Couldn't download that PDF."}
+        result = capture_pdf(CapturePdfRequest(url=url, data=base64.b64encode(data).decode()))
+    else:
+        html = trafilatura.fetch_url(url)
+        if html is None:
+            return {"ok": False, "reason": "Couldn't open that page. Some sites block programs; save it from the browser instead."}
+        result = capture(CaptureRequest(url=url, html=html))
+    if result.get("ok"):
+        keep(url, reading.project or None)
+    return result
+
+
+@app.post("/sources/add-pdf")
+def add_pdf(req: AddPdfRequest):
+    url = f"file://{req.name}"
+    result = capture_pdf(CapturePdfRequest(url=url, title=Path(req.name).stem, data=req.data))
+    if result.get("ok"):
+        keep(url, reading.project or None)
+    return result
+
+
 # --- Debug only: capture by URL so you can test from /docs without the extension ---
 @app.post("/debug/capture-url")
 def capture_url(req: CaptureUrlRequest):

@@ -1,6 +1,7 @@
 import AppKit
 import ServiceManagement
 import SwiftUI
+import UniformTypeIdentifiers
 
 let server = URL(string: "http://localhost:8000")!
 
@@ -62,6 +63,23 @@ final class Model: ObservableObject {
         refresh()
         if result == nil { return "Referee's server isn't running." }
         return (result?["ok"] as? Bool ?? false) ? nil : result?["reason"] as? String
+    }
+
+    /// Saves a web page, PDF link or YouTube video into the current project. Returns a problem, or nil.
+    func addLink(_ link: String) async -> String? {
+        let result = await API.post("sources/add-url", ["url": link])
+        refresh()
+        if result == nil { return "Referee's server isn't running." }
+        return (result?["ok"] as? Bool ?? false) ? nil : result?["reason"] as? String ?? "Couldn't read that page."
+    }
+
+    /// Saves a PDF from this Mac into the current project. Returns a problem, or nil.
+    func addPDF(_ file: URL) async -> String? {
+        guard let data = try? Data(contentsOf: file) else { return "Couldn't open that file." }
+        let result = await API.post("sources/add-pdf", ["name": file.path, "data": data.base64EncodedString()])
+        refresh()
+        if result == nil { return "Referee's server isn't running." }
+        return (result?["ok"] as? Bool ?? false) ? nil : result?["reason"] as? String ?? "Couldn't read that PDF."
     }
 
     func removeKey() {
@@ -235,6 +253,7 @@ struct MenuContent: View {
             .labelsHidden()
         }
         Divider()
+        Button("Add Source…") { show("add-source") }
         Button("Open Library") { Library.open(repo: repo) }
         Button("Settings…") { show("settings") }
             .keyboardShortcut(",")
@@ -253,6 +272,91 @@ struct MenuContent: View {
     private func show(_ id: String) {
         openWindow(id: id)
         NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+/// Adds a source by hand: a link (web page, PDF or YouTube video) or a PDF on this Mac. Saved
+/// into the current project, so Referee works without the browser extension.
+struct AddSourceView: View {
+
+    @ObservedObject var model: Model
+    @State private var link = ""
+    @State private var message: String?
+    @State private var failed = false
+    @State private var working = false
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 10) {
+                Image(systemName: "plus.rectangle.on.folder")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+                Text("Add Source").font(.title3.weight(.semibold))
+            }
+            Text(model.project.isEmpty
+                 ? "Paste a link to a page, PDF or YouTube video, or choose a PDF on this Mac."
+                 : "Paste a link to a page, PDF or YouTube video, or choose a PDF on this Mac. It's saved to \(model.project).")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                TextField("https://…", text: $link)
+                    .textFieldStyle(.plain)
+                    .focused($focused)
+                    .onSubmit(addLink)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .glassCard()
+                Button(working ? "Adding…" : "Add", action: addLink)
+                    .disabled(link.trimmingCharacters(in: .whitespaces).isEmpty || working)
+                    .prominentGlassButton()
+            }
+            HStack {
+                Button("Choose a PDF…", action: choosePDF)
+                    .disabled(working)
+                    .glassButton()
+                Spacer()
+                if let message {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(failed ? .orange : .green)
+                        .multilineTextAlignment(.trailing)
+                }
+            }
+        }
+        .padding(.horizontal, 22)
+        .padding(.bottom, 20)
+        .padding(.top, 4)
+        .frame(width: 420)
+        .fixedSize(horizontal: false, vertical: true)
+        .background(WindowGlass().ignoresSafeArea())
+        .onAppear { focused = true }
+    }
+
+    private func addLink() {
+        let entered = link
+        run { await model.addLink(entered) } done: { link = "" }
+    }
+
+    private func choosePDF() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.allowsMultipleSelection = false
+        guard panel.runModal() == .OK, let file = panel.url else { return }
+        run { await model.addPDF(file) } done: {}
+    }
+
+    private func run(_ work: @escaping () async -> String?, done: @escaping () -> Void) {
+        working = true
+        message = nil
+        Task {
+            let problem = await work()
+            working = false
+            failed = problem != nil
+            message = problem ?? "Saved."
+            if problem == nil { done() }
+        }
     }
 }
 
@@ -625,6 +729,11 @@ struct RefereeApp: App {
                 .background(SettingsOpener())
             if !model.online { Text("⚠︎") }
         }
+        Window("Add Source", id: "add-source") {
+            AddSourceView(model: model)
+        }
+        .windowResizability(.contentSize)
+        .windowStyle(.hiddenTitleBar)
         Window("New Project", id: "new-project") {
             NewProjectView(model: model)
         }

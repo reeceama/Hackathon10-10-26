@@ -40,6 +40,24 @@ def pdf_date(raw: Optional[str]) -> Optional[str]:
     return "-".join(part for part in match.groups() if part)
 
 
+BOILERPLATE = re.compile(r"permission|copyright|licen[cs]e|©|arxiv|preprint|proceedings|conference|journal|"
+                         r"vol\.|doi|https?:|www\.|@|accepted|submitted|published", re.IGNORECASE)
+
+
+def first_page_title(text: str) -> Optional[str]:
+
+    """
+    The title from the first page's lines: the first short line that isn't publishing or legal
+    boilerplate and doesn't end like a sentence.
+    """
+
+    for line in (text or "").splitlines()[:25]:
+        line = line.strip()
+        if 2 <= len(line.split()) <= 20 and not line.endswith((".", ",", ";", ":")) and not BOILERPLATE.search(line):
+            return line
+    return None
+
+
 def extract_pdf(data: bytes, url: Optional[str] = None) -> Tuple[Dict, List[Tuple[str, int]]]:
 
     """
@@ -77,7 +95,8 @@ def extract_pdf(data: bytes, url: Optional[str] = None) -> Tuple[Dict, List[Tupl
     if not sentences:
         raise ValueError("No readable text in this PDF (it may be a scanned image).")
     if not metadata["title"]:
-        metadata["title"] = sentences[0][0][:120]  # first line is usually the title
+        first_page = reader.pages[0].extract_text() or "" if reader.pages else ""
+        metadata["title"] = first_page_title(first_page) or sentences[0][0][:120]
 
     passages = []
     step = PASSAGE_SIZE - 1
