@@ -74,7 +74,13 @@ if (!isSkipped(location.href)) {
     timer = setInterval(tick, 1000);
   });
 
-  document.addEventListener("mouseup", () => {
-    if (String(window.getSelection()).trim().length >= MIN_SELECTION) capture().catch(() => {});
+  // Highlighting counts as reading, and what you highlight is kept as a note on the source,
+  // only while capture is on (research mode, a Focus, or writing), like the page itself.
+  document.addEventListener("mouseup", async () => {
+    const selected = String(window.getSelection()).trim();
+    if (selected.length < MIN_SELECTION) return;
+    capture().catch(() => {});
+    if (document.querySelector('input[type="password"]') || !(await capturing().catch(() => false))) return;
+    chrome.runtime.sendMessage({ type: "highlight", body: { url: location.href, text: selected.slice(0, 1000) } }).catch(() => {});
   });
 }

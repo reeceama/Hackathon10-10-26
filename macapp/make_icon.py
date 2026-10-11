@@ -98,8 +98,9 @@ def draw(tile_size=TILE, radius=RADIUS, drop_shadow=True) -> Image.Image:
 
 if __name__ == "__main__":
     if "--extension" in sys.argv:
-        # Browsers show extension icons as they are, so the tile fills the square.
-        icon = draw(tile_size=SIZE - 16, radius=200, drop_shadow=False)
+        # Browsers show extension icons as they are, beside other square toolbar icons: the tile
+        # fills the whole square, with only slightly rounded corners.
+        icon = draw(tile_size=SIZE, radius=110, drop_shadow=False)
         for size in (16, 32, 48, 128):
             out = HERE.parent / "extension" / "icons" / f"icon{size}.png"
             icon.resize((size, size), Image.LANCZOS).save(out)

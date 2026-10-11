@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The library: your reading, projects, reference list and proof-of-work report, in the app,
 /// so Referee needs no browser extension to manage what it knows.
@@ -8,6 +9,7 @@ final class LibraryModel: ObservableObject {
 
     @Published var sources: [[String: Any]] = []
     @Published var claims: [[String: Any]] = []
+    @Published var notes: [String: [String]] = [:]   // source URL -> what was highlighted on it
     @Published var projects: [String] = []
     @Published var current = ""
     @Published var links: [String: [String]] = [:]
@@ -22,6 +24,8 @@ final class LibraryModel: ObservableObject {
         Task {
             sources = await API.getList("sources")
             claims = await API.getList("claims")
+            let found = await API.get("highlights") ?? [:]
+            notes = found.mapValues { ($0 as? [[String: Any]] ?? []).compactMap { $0["text"] as? String } }
             if let settings = await API.get("settings") {
                 projects = settings["projects"] as? [String] ?? []
                 current = settings["project"] as? String ?? ""
@@ -79,7 +83,10 @@ final class LibraryModel: ObservableObject {
         let backed = mine.filter { ($0["label"] as? String) == "supports" }
         if mine.isEmpty { return "No claims checked yet." }
         var line = "\(backed.count) claim\(backed.count == 1 ? "" : "s") backed by your reading"
-        if mine.count > backed.count { line += " · \(mine.count - backed.count) contradicted by a source" }
+        let against = mine.filter { ($0["label"] as? String) == "contradicts" }.count
+        let unsupported = mine.filter { ($0["label"] as? String) == "needs_source" }.count
+        if against > 0 { line += " · \(against) contradicted by a source" }
+        if unsupported > 0 { line += " · \(unsupported) need\(unsupported == 1 ? "s" : "") a source" }
         var perSource: [String: Int] = [:]
         for claim in backed { perSource[(claim["source"] as? [String: Any])?["url"] as? String ?? "", default: 0] += 1 }
         if backed.count >= 4, let top = perSource.values.max(), Double(top) / Double(backed.count) > 0.5 {
@@ -97,15 +104,54 @@ final class LibraryModel: ObservableObject {
     func forget(_ url: String) { Task { _ = await API.delete("sources?url=\(url.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")"); load() } }
     func forgetEverything() { Task { _ = await API.post("clear", [:]); load() } }
 
-    func openReport() {
+    /// Opens one of the server's report pages (proof of work, before you submit, research trail) in the browser.
+    func open(_ page: String, named name: String) {
         Task {
-            let query = "report?project=\(filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "all")&style=\(style)"
-            guard let page = await API.request(query) else { return }
-            let file = FileManager.default.temporaryDirectory.appendingPathComponent("Referee proof of work.html")
-            try? page.write(to: file)
+            let query = "\(page)?project=\(filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "all")&style=\(style)"
+            guard let html = await API.request(query) else { return }
+            let file = FileManager.default.temporaryDirectory.appendingPathComponent("Referee \(name).html")
+            try? html.write(to: file)
             NSWorkspace.shared.open(file)
         }
     }
+
+    /// Saves this view's saved sources as BibTeX or RIS, for Zotero, Mendeley or LaTeX.
+    func export() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = "Referee sources.bib"
+        panel.allowedContentTypes = [.init(filenameExtension: "bib")!, .init(filenameExtension: "ris")!]
+        panel.message = "Save as .bib (BibTeX, for Zotero or LaTeX) or .ris (for Zotero, Mendeley or EndNote)."
+        guard panel.runModal() == .OK, let file = panel.url else { return }
+        Task {
+            let format = file.pathExtension.lowercased() == "ris" ? "ris" : "bibtex"
+            let query = "export?format=\(format)&project=\(filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "all")"
+            guard let data = await API.request(query) else { return }
+            try? data.write(to: file)
+        }
+    }
+
+    /// Imports a BibTeX or RIS file: each entry is fetched and saved to the current project.
+    func importFile() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.init(filenameExtension: "bib")!, .init(filenameExtension: "ris")!]
+        panel.message = "Choose a .bib or .ris file, for example exported from Zotero."
+        guard panel.runModal() == .OK, let file = panel.url, let text = try? String(contentsOf: file, encoding: .utf8) else { return }
+        importing = true
+        Task {
+            let result = await API.post("import", ["text": text], timeout: 600)
+            importing = false
+            load()
+            let added = result?["added"] as? Int ?? 0
+            let failed = result?["failed"] as? [String] ?? []
+            let alert = NSAlert()
+            alert.messageText = result == nil ? "Import didn't finish" : "Imported \(added) source\(added == 1 ? "" : "s")"
+            alert.informativeText = result == nil ? "Referee's server didn't answer in time. Try a smaller file."
+                : failed.isEmpty ? "Each one was read and saved to your current project." : "Couldn't read:\n" + failed.prefix(12).joined(separator: "\n")
+            alert.runModal()
+        }
+    }
+
+    @Published var importing = false
 }
 
 struct LibraryView: View {
@@ -163,7 +209,20 @@ struct LibraryView: View {
                 .frame(width: 140)
                 .padding(.horizontal, 10).padding(.vertical, 6)
                 .glassCard()
-            Button("Proof of Work") { library.openReport() }.glassButton()
+            Menu("Reports") {
+                Button("Before You Submit") { library.open("presubmission", named: "before you submit") }
+                Button("Research Trail") { library.open("trail", named: "research trail") }
+                Button("Proof of Work") { library.open("report", named: "proof of work") }
+            }
+            .fixedSize()
+            .glassButton()
+            Menu(library.importing ? "Importing…" : "Zotero") {
+                Button("Import .bib or .ris…") { library.importFile() }
+                Button("Export Saved Sources…") { library.export() }
+            }
+            .fixedSize()
+            .disabled(library.importing)
+            .glassButton()
         }
     }
 
@@ -315,6 +374,15 @@ struct LibraryView: View {
                     Text(title(source)).fontWeight(.semibold)
                 }
                 if !read.isEmpty { Text(read).font(.caption).foregroundStyle(.secondary) }
+                ForEach(Array((library.notes[url] ?? []).prefix(3).enumerated()), id: \.offset) { _, note in
+                    Text("“\(note)”")
+                        .font(.caption)
+                        .italic()
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                        .padding(.leading, 8)
+                        .overlay(alignment: .leading) { Rectangle().fill(.yellow.opacity(0.6)).frame(width: 2) }
+                }
                 HStack(spacing: 6) {
                     if source["retracted"] as? Bool == true { tag("Retracted", colour: .red) }
                     tag(temporary ? "Temporary" : "Saved", colour: temporary ? .orange : .green)

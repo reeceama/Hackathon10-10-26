@@ -14,6 +14,10 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     post(message.type, message.body).then(reply).catch((error) => reply({ error: String(error) }));
     return true; // reply asynchronously
   }
+  if (message.type === "highlight") {
+    post("highlights", message.body).then(reply).catch(() => reply({ ok: false }));
+    return true;
+  }
   if (message.type === "capture") {
     capture(message.body).then(reply);
     return true;

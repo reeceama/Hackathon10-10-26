@@ -145,8 +145,9 @@ def notes_for(result: Dict, sentence: str = "") -> List[str]:
         if not result.get("needs_source"):
             return []
         closest = "; ".join(citations.clean_title(c) for c in result.get("closest") or [])
-        return ["This reads like a factual claim, but nothing you've read supports it yet."
-                + (f" Closest in your reading: {closest}." if closest else "")]
+        search = f" Look for evidence: {result['search']}" if result.get("search") else ""
+        return [COMMENT_PREFIX + "This reads like a factual claim, but nothing you've read supports it yet."
+                + (f" Closest in your reading: {closest}." if closest else "") + search]
     notes = []
     source = result.get("source") or {}
     if result["label"] == "supports" and QUOTED.search(sentence) and result.get("page") is None and result.get("time") is None:
@@ -290,7 +291,8 @@ class Helper:
 
         results = []
         for item in fresh:
-            result = self.post("/check", {"sentence": item["sentence"], "project": settings["project"]})
+            result = self.post("/check", {"sentence": item["sentence"], "project": settings["project"],
+                                          "document": Path(name).name})
             if result is None:
                 return  # server not running: try again on the next pause
             results.append((item, result))

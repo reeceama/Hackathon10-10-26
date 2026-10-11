@@ -11,6 +11,7 @@ store.json
 store.npy
 feedback.json
 claims.json
+highlights.json
 reading.json
 verdicts.json
 audits.json

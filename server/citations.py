@@ -15,8 +15,9 @@ from urllib.parse import urlparse
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August",
           "September", "October", "November", "December"]
 SHORT_MONTHS = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."]
-HEADINGS = {"apa": "References", "harvard": "Reference list", "mla": "Works Cited", "ieee": "References", "ams": "References"}
-NUMBERED = {"ieee", "ams"}
+HEADINGS = {"apa": "References", "harvard": "Reference list", "mla": "Works Cited", "chicago": "References",
+            "ieee": "References", "ams": "References", "vancouver": "References"}
+NUMBERED = {"ieee", "ams", "vancouver"}
 
 
 def _squash(text: Optional[str]) -> str:
@@ -170,6 +171,14 @@ def in_text(style: str, source: Dict, number: Optional[int] = None, page=None, t
     if style == "harvard":
         who = (_surnames(source) or _site(source) or _short_title(source)).replace(" & ", " and ")
         return f"({who}, {d['year'] if d else 'no date'}{where})"
+    if style == "chicago":
+        # Chicago author-date: (Smith 2023, 45), (Smith and Jones 2023), (Smith et al. 2023)
+        names = [_parse_name(n)["last"] for n in _split_authors(source.get("author"))]
+        who = f"{names[0]} et al." if len(names) > 3 else " and ".join(names) if len(names) < 3 else f"{names[0]}, {names[1]}, and {names[2]}"
+        if not names:
+            who = f"“{_short_title(source)}”"
+        at = f", {page}" if page else f", {timestamp(time)}" if time is not None else ""
+        return f"({who} {d['year'] if d else 'n.d.'}{at})"
     if style == "mla":
         names = [_parse_name(n)["last"] for n in _split_authors(source.get("author"))]
         who = f"{names[0]} et al." if len(names) > 2 else " and ".join(names) if names else f"“{_short_title(source)}”"
@@ -223,6 +232,27 @@ def reference(style: str, source: Dict, number: Optional[int] = None) -> str:
         kind = "Online Video" if _is_video(source) else "Online"
         return (f"[{number}] {who}{body} [{kind}]. Available: {url} "
                 f"(Accessed: {SHORT_MONTHS[a['month'] - 1]} {a['day']}, {a['year']}).")
+
+    if style == "chicago":
+        # Smith, Jane, and Tom Jones. 2023. “Title.” Site, Month Day, Year. URL.
+        people = [_parse_name(n) for n in names]
+        full = [f"{p['last']}, {' '.join(p['firsts'])}" if i == 0 and p["firsts"] else f"{' '.join(p['firsts'])} {p['last']}".strip()
+                for i, p in enumerate(people)]
+        who = full[0] if len(full) == 1 else f"{full[0]} and {full[1]}" if len(full) == 2 else ", ".join(full[:-1]) + ", and " + full[-1] if full else site or title
+        when = f"{MONTHS[d['month'] - 1]} {d['day']}, {d['year']}" if d and d["month"] and d["day"] else None
+        video = " YouTube video." if _is_video(source) else ""
+        tail = f"{site}, {when}." if site and when else f"{site}." if site else ""
+        accessed = "" if d else f" Accessed {MONTHS[a['month'] - 1]} {a['day']}, {a['year']}."
+        return f"{_end_stop(who)} {d['year'] + '.' if d else 'n.d.'} “{_end_stop(title)}”{video} {tail}{accessed} {url}.".replace("  ", " ")
+
+    if style == "vancouver":
+        # 1. Smith J, Jones T. Title [Internet]. Site; 2023 [cited 2026 Oct 11]. Available from: URL
+        people = [_parse_name(n) for n in names]
+        who = ", ".join(f"{p['last']} {''.join(f[0] for f in p['firsts'])}".strip() for p in people[:6]) + (", et al" if len(people) > 6 else "")
+        kind = "Video" if _is_video(source) else "Internet"
+        cited = f"{a['year']} {SHORT_MONTHS[a['month'] - 1].rstrip('.')} {a['day']}"
+        where = "; ".join(v for v in [site, d["year"] if d else None] if v)
+        return f"{number}. {who + '. ' if who else ''}{title.rstrip('.')} [{kind}]. {where + ' ' if where else ''}[cited {cited}]. Available from: {url}"
 
     if style == "ams":
         who = f"{_initials_first(names)}, " if names else ""

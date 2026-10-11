@@ -41,6 +41,8 @@ Referee checks your writing as you type in Word, and updates itself when a new r
 
 Captured reading is temporary: it can be cited straight away, and is forgotten after 15 minutes (or an hour, or a day) unless you keep it. **Save for later** in the extension's popup keeps the page you're on, whether or not it was captured; sources added by hand are kept straight away, and any source your writing cites is kept automatically. Kept sources belong to the current project, chosen or created from the menu bar, the library or the popup. Projects are kept apart: writing is only checked against its own project's sources, plus any other projects you link it to in the library, where sources can also be moved between projects. The extension never runs in private (Incognito) windows. The library lists your reading, saved or temporary, and lets you save, move or forget any source.
 
+Text you highlight while reading is kept as a note on its source, and the passages you highlighted are tried first when checking your claims. Academic sources with a DOI (journal articles, arXiv papers) get their exact authors, year and journal from doi.org, and a warning if Crossref records a retraction.
+
 Banking, payment, login and account pages, email, social media, search results and writing tools are never captured, nor is any page with a password box. Before a page leaves the browser tab, every form field, text box and script is removed, so nothing anyone typed is sent.
 
 **While you write.** Each sentence is checked when it is finished, whether or not research mode is on. Research mode controls what is captured; anything already captured can be checked against at any time.
@@ -55,7 +57,7 @@ Banking, payment, login and account pages, email, social media, search results a
 
 Referee also warns when a figure in the sentence isn't in the source, shows exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. The library summarises how many claims your reading backs, and flags leaning heavily on one source.
 
-In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are marked and cited, a reference list is kept at the end, and warnings become comments (and are listed in the library). Sentences are marked with coloured underlines (green supported, amber check the wording, red contradicted), or highlights, or nothing, as chosen in settings; **Remove Marks in Word** in the menu bar clears Referee's marks, leaving your own. The library, a window in Referee for Mac (and a page in the extension), lists everything you've read, manages projects, and gives the reference list for what you've cited in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
+In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are marked and cited, a reference list is kept at the end, and warnings become comments (and are listed in the library). Sentences are marked with coloured underlines (green supported, amber check the wording, red contradicted), or highlights, or nothing, as chosen in settings; **Remove Marks in Word** in the menu bar clears Referee's marks, leaving your own. The library, a window in Referee for Mac (and a page in the extension), lists everything you've read, manages projects, and gives the reference list for what you've cited in APA 7, Harvard, MLA 9, Chicago, IEEE, AMS or Vancouver, with page numbers for PDFs and timestamps for videos. It imports and exports BibTeX and RIS files, for Zotero, Mendeley, EndNote or LaTeX: imported entries are fetched by their link, DOI or arXiv ID and read, so Referee can check against them. Three reports open from it: **Before You Submit** (for each document, how many claims are backed, contradicted or need a source, everything worth fixing, and how varied and recent your sources are), **Research Trail** (a day-by-day timeline of what you read, saved, highlighted and claimed) and **Proof of Work** (what you read, when, and which claims it backs). Claims that need a source come with the closest reading you have and a Google Scholar search for their key terms: places to look, never text to use.
 
 If a sentence makes no claim and nothing you read relates to it, Referee stays silent rather than guessing.
 
@@ -162,7 +164,10 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── claim_log.py            claims each source has backed, for the library
 │   ├── reading.py              projects, and how long unsaved reading is kept
 │   ├── citations.py            citation styles, for the Word helper and the library
-│   ├── library.py              reference lists and the proof-of-work report
+│   ├── library.py              reference lists and the reports (proof of work, before you submit, research trail)
+│   ├── highlights.py           text highlighted while reading, kept as notes
+│   ├── metadata.py             details from a source's DOI, and retraction checks
+│   ├── bib.py                  BibTeX and RIS import and export
 │   ├── eval_scifact.py         verifier evaluation on SciFact
 │   ├── eval_wording.py         copying detection calibration
 │   ├── load_demo.py            preloads demo sources
@@ -240,7 +245,7 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `POST /capture` | `{url, html, project}` | `{ok, passages}` |
 | `POST /capture-pdf` | `{url, data, title, project}` (PDF as base64) | `{ok, passages}` |
 | `POST /capture-video` | `{url, project}` | `{ok, passages}` |
-| `POST /check` | `{sentence, project}` | `{match: false, needs_source, closest}` or `{match: true, label, quote, source, passage, page, time, confidence, score, misquote, too_close, changes, wrong_numbers, mixed, together_with}` |
+| `POST /check` | `{sentence, project, document}` | `{match: false, needs_source, closest}` or `{match: true, label, quote, source, passage, page, time, confidence, score, misquote, too_close, changes, wrong_numbers, mixed, together_with}` |
 | `GET /sources`, `DELETE /sources?url=` | | lists captured sources, or forgets one |
 | `GET /claims?project=` | | claims the reading has backed or contradicted, oldest first |
 | `POST /focus` | `{on}` | switches research mode on or off (macOS Focus) |
@@ -254,6 +259,11 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `POST /feedback/reset` | | clears learned behaviour |
 | `POST /writing`, `GET /writing` | | marks or reports an active writing session (automatic mode) |
 | `POST /clear` | | forgets all captured reading |
+| `POST /highlights`, `GET /highlights?url=` | `{url, text}` | keeps text highlighted while reading; lists a source's highlights |
+| `GET /presubmission?project=` | | the Before You Submit report, as a web page |
+| `GET /trail?project=` | | the Research Trail, as a web page |
+| `GET /export?format=bibtex\|ris&project=` | | saved sources as a BibTeX or RIS file |
+| `POST /import` | `{text}` (a BibTeX or RIS file) | fetches and saves each entry; returns how many were added and which failed |
 | `POST /sources/add-url` | `{url}` | adds a page, PDF or YouTube video by its link, kept in the current project |
 | `POST /sources/add-pdf` | `{name, data}` (PDF as base64) | adds a PDF from this computer, kept in the current project |
 | `POST /sources/forget-temporary` | | forgets reading that hasn't been saved or cited |

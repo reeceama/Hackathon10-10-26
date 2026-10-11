@@ -9,7 +9,7 @@ import requests
 import trafilatura
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
 from pydantic import BaseModel
  
 import base64
@@ -25,16 +25,22 @@ from claims import needs_source
 from feedback import FeedbackModel
 import paths
 import library
+import bib
 import api_key
 from claim_log import ClaimLog
+from highlights import Highlights
+from keywords import tokens
+from urllib.parse import quote_plus
  
 # Minimum similarity score before a passage is sent to Claude at all.
 # Set this from the scores load_demo.py prints for your real demo sources.
 MIN_SCORE = 0.5
+HIGHLIGHT_SCORE = 0.4  # passages the person highlighted count with a little less similarity
 CLOSEST_SCORE = 0.3  # loosely related reading worth suggesting for an unsupported claim
 
 feedback = FeedbackModel(paths.data("feedback.json"))
 claim_log = ClaimLog(paths.data("claims.json"))
+highlights = Highlights(paths.data("highlights.json"))
 reading = ReadingSettings(paths.data("reading.json"))
 
 
@@ -133,7 +139,8 @@ class CaptureRequest(BaseModel):
  
 class CheckRequest(BaseModel):
     sentence: str
-    project: str = ""  # only check against this project's reading
+    project: str = ""   # only check against this project's reading
+    document: str = ""  # which piece of writing it's from, for the reports
  
  
 class CapturePdfRequest(BaseModel):
@@ -246,6 +253,19 @@ def capture_video(req: CaptureVideoRequest):
     return {"ok": True, "passages": added}
 
 
+def log_unsupported(sentence, unsupported, project, document):
+    # Claims that need a source are logged too, for the pre-submission report and research trail.
+    if unsupported["needs_source"]:
+        claim_log.record(sentence, {"label": "needs_source", "closest": unsupported["closest"]}, project, document)
+    return unsupported
+
+
+def scholar_search(sentence):
+    """A Google Scholar search for the sentence's key terms: a place to look, not text to use."""
+    terms = [t for t in tokens(sentence) if len(t) > 3 and not t.isdigit()][:8]
+    return "https://scholar.google.com/scholar?q=" + quote_plus(" ".join(terms)) if terms else None
+
+
 def closest_sources(results, limit=3):
     seen, closest = set(), []
     for r in results:
@@ -265,20 +285,26 @@ def check(req: CheckRequest):
  
     project = req.project or reading.project or None
     results = search(sentence, k=5, projects=reading.allowed(project))  # 3 missed the best passage in testing
+    # Passages the person highlighted while reading go first, and count with a slightly lower
+    # similarity: what they marked as important is most likely what they're citing.
+    for r in results:
+        r["highlighted"] = highlights.overlaps(r["source"].get("url"), r["text"])
+    results.sort(key=lambda r: not r["highlighted"])
 
     # No supporting reading: say whether the sentence reads like a claim that needs one, and
     # which sources already read come closest, as places to look. Nothing is written for them.
-    unsupported = {"match": False, "needs_source": needs_source(sentence), "closest": closest_sources(results)}
-    candidates = [r for r in results if r["score"] >= MIN_SCORE]
+    unsupported = {"match": False, "needs_source": needs_source(sentence), "closest": closest_sources(results),
+                   "search": scholar_search(sentence)}
+    candidates = [r for r in results if r["score"] >= (HIGHLIGHT_SCORE if r["highlighted"] else MIN_SCORE)]
     if not candidates:
-        return unsupported
- 
+        return log_unsupported(sentence, unsupported, project, req.document)
+
     verdict = verify(sentence, candidates)
     if verdict is None:
-        return unsupported
+        return log_unsupported(sentence, unsupported, project, req.document)
     if not feedback.should_show(verdict):  # this person keeps rejecting markers like this
         return {"match": False}
-    claim_log.record(sentence, verdict, project)  # for the library and proof of work
+    claim_log.record(sentence, verdict, project, req.document)  # for the library and reports
     if verdict.get("label") == "supports" and verdict.get("source", {}).get("url"):
         keep(verdict["source"]["url"])  # cited sources are kept automatically
     # verdict includes "label": "supports" or "contradicts" - Word handles both
@@ -383,6 +409,7 @@ def list_sources():
 @app.delete("/sources")
 def forget_source(url: str):
     claim_log.forget(url)
+    highlights.forget(url)
     return {"ok": True, "removed": forget(url)}
 
 
@@ -493,9 +520,62 @@ def list_references(project: str = "all", style: str = "apa"):
     return library.references(sources(), claim_log.claims(), library_project(project), style)
 
 
+class ImportRequest(BaseModel):
+    text: str  # a BibTeX or RIS file
+
+
+@app.get("/export", response_class=PlainTextResponse)
+def export_sources(format: str = "bibtex", project: str = "all"):
+    # Saved sources in the chosen project, as a BibTeX or RIS file (Zotero reads both).
+    chosen = library_project(project)
+    kept = [s for s in sources() if s.get("kept") is not False and library.in_project(s.get("project"), chosen)]
+    return bib.ris(kept) if format == "ris" else bib.bibtex(kept)
+
+
+@app.post("/import")
+def import_sources(req: ImportRequest):
+    # Each entry is fetched through its link, DOI or arXiv ID and saved like Add Source.
+    added, failed = 0, []
+    for entry in bib.entries(req.text):
+        if not entry.get("link"):
+            failed.append(f"{entry['title']} (no link, DOI or arXiv ID)")
+            continue
+        result = add_url(CaptureUrlRequest(url=entry["link"]))
+        if result.get("ok"):
+            added += 1
+        else:
+            failed.append(f"{entry['title']} ({result.get('reason') or 'couldn’t be read'})")
+    return {"ok": True, "added": added, "failed": failed}
+
+
+@app.get("/presubmission", response_class=HTMLResponse)
+def before_you_submit(project: str = "all"):
+    return library.presubmission(sources(), claim_log.claims(), library_project(project))
+
+
+@app.get("/trail", response_class=HTMLResponse)
+def research_trail(project: str = "all"):
+    return library.trail(sources(), claim_log.claims(), highlights.notes, library_project(project))
+
+
 @app.get("/report", response_class=HTMLResponse)
 def proof_of_work(project: str = "all", style: str = "apa"):
     return library.report(sources(), claim_log.claims(), library_project(project), style)
+
+
+class HighlightRequest(BaseModel):
+    url: str
+    text: str
+
+
+@app.post("/highlights")
+def add_highlight(req: HighlightRequest):
+    return {"ok": highlights.add(req.url, req.text)}
+
+
+@app.get("/highlights")
+def list_highlights(url: str = ""):
+    return highlights.for_url(url) if url else highlights.notes
 
 
 @app.get("/claims")
@@ -507,6 +587,7 @@ def list_claims(project: str = ""):
 def clear_store():
     clear()
     claim_log.clear()
+    highlights.clear()
     return {"ok": True}
  
  
@@ -524,17 +605,18 @@ def add_url(req: CaptureUrlRequest):
         url = "https://" + url
     if ("youtube.com/" in url or "youtu.be/" in url):
         result = capture_video(CaptureVideoRequest(url=url))
-    elif url.lower().split("?")[0].endswith(".pdf"):
-        try:
-            data = requests.get(url, timeout=30).content
-        except requests.RequestException:
-            return {"ok": False, "reason": "Couldn't download that PDF."}
-        result = capture_pdf(CapturePdfRequest(url=url, data=base64.b64encode(data).decode()))
     else:
-        html = trafilatura.fetch_url(url)
-        if html is None:
-            return {"ok": False, "reason": "Couldn't open that page. Some sites block programs; save it from the browser instead."}
-        result = capture(CaptureRequest(url=url, html=html))
+        # Look at what comes back, not the link: many PDF links (arXiv, journals) don't end in .pdf.
+        try:
+            response = requests.get(url, timeout=30, headers={"User-Agent": "Mozilla/5.0 (Macintosh) Referee"})
+        except requests.RequestException:
+            return {"ok": False, "reason": "Couldn't open that link."}
+        if not response.ok:
+            return {"ok": False, "reason": f"The site answered {response.status_code}. Some sites block programs; save it from the browser instead."}
+        if "pdf" in response.headers.get("content-type", "").lower() or response.content[:5] == b"%PDF-":
+            result = capture_pdf(CapturePdfRequest(url=url, data=base64.b64encode(response.content).decode()))
+        else:
+            result = capture(CaptureRequest(url=url, html=response.text))
     if result.get("ok"):
         keep(url, reading.project or None)
     return result

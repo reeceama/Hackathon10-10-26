@@ -167,7 +167,8 @@ const RELIANCE_MIN_CLAIMS = 4;
 function renderSummary() {
   const mine = claims.filter((c) => inProject(c.project));
   const backed = mine.filter((c) => c.label === "supports");
-  const against = mine.length - backed.length;
+  const against = mine.filter((c) => c.label === "contradicts").length;
+  const unsupported = mine.filter((c) => c.label === "needs_source").length;
   const box = document.getElementById("summary");
   if (!mine.length) {
     box.textContent = "";
@@ -179,6 +180,7 @@ function renderSummary() {
   const topSource = backed.find((c) => c.source.url === topUrl)?.source;
   box.innerHTML = `<strong>${backed.length} claim${backed.length === 1 ? "" : "s"} backed by your reading</strong>` +
     (against ? ` · ${against} contradicted by a source` : "") +
+    (unsupported ? ` · ${unsupported} need${unsupported === 1 ? "s" : ""} a source` : "") +
     (backed.length >= RELIANCE_MIN_CLAIMS && top / backed.length > RELIANCE_SHARE
       ? `<span class="note">${top} of them rest on one source (${escapeHtml(Cite.cleanTitle(topSource))}). Consider backing some with others.</span>` : "");
 }

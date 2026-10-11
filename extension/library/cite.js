@@ -196,6 +196,52 @@ const Cite = (() => {
       },
     },
 
+    chicago: {
+      name: "Chicago",
+      numbered: false,
+      inText(source, where = {}) {
+        const d = parseDate(source.date);
+        const names = splitAuthors(source.author).map(parseName).map((n) => n.last);
+        let who = names.length > 3 ? `${names[0]} et al.` : names.length < 3 ? names.join(" and ") : `${names[0]}, ${names[1]}, and ${names[2]}`;
+        if (!names.length) who = `“${shortTitle(source)}”`;
+        const at = where.page ? `, ${where.page}` : where.time != null ? `, ${timestamp(where.time)}` : "";
+        return `(${who} ${d ? d.year : "n.d."}${at})`;
+      },
+      // Smith, Jane, and Tom Jones. 2023. “Title.” Site, Month Day, Year. URL.
+      reference(source) {
+        const people = splitAuthors(source.author).map(parseName);
+        const full = people.map((p, i) => (i === 0 && p.firsts.length ? `${p.last}, ${p.firsts.join(" ")}` : `${p.firsts.join(" ")} ${p.last}`.trim()));
+        const title = cleanTitle(source);
+        const d = parseDate(source.date);
+        const a = accessed(source);
+        const who = full.length === 1 ? full[0] : full.length === 2 ? `${full[0]} and ${full[1]}` : full.length ? `${full.slice(0, -1).join(", ")}, and ${full[full.length - 1]}` : site(source) || title;
+        const when = d && d.month && d.day ? `${MONTHS[d.month - 1]} ${d.day}, ${d.year}` : null;
+        const video = isVideo(source) ? " YouTube video." : "";
+        const tail = site(source) && when ? `${site(source)}, ${when}.` : site(source) ? `${site(source)}.` : "";
+        const seen = d ? "" : ` Accessed ${MONTHS[a.month - 1]} ${a.day}, ${a.year}.`;
+        return `${endStop(who)} ${d ? `${d.year}.` : "n.d."} “${endStop(title)}”${video} ${tail}${seen} ${source.url || ""}.`.replace(/  /g, " ");
+      },
+    },
+
+    vancouver: {
+      name: "Vancouver",
+      numbered: true,
+      inText(source, where = {}) {
+        return `[${where.number}${locator(where)}]`;
+      },
+      // 1. Smith J, Jones T. Title [Internet]. Site; 2023 [cited 2026 Oct 11]. Available from: URL
+      reference(source, { number } = {}) {
+        const people = splitAuthors(source.author).map(parseName);
+        const who = people.slice(0, 6).map((p) => `${p.last} ${p.firsts.map((f) => f[0]).join("")}`.trim()).join(", ") + (people.length > 6 ? ", et al" : "");
+        const d = parseDate(source.date);
+        const a = accessed(source);
+        const kind = isVideo(source) ? "Video" : "Internet";
+        const cited = `${a.year} ${SHORT_MONTHS[a.month - 1].replace(/\.$/, "")} ${a.day}`;
+        const where = [site(source), d ? d.year : null].filter(Boolean).join("; ");
+        return `${number}. ${who ? `${who}. ` : ""}${cleanTitle(source).replace(/\.$/, "")} [${kind}]. ${where ? `${where} ` : ""}[cited ${cited}]. Available from: ${source.url}`;
+      },
+    },
+
     ams: {
       name: "AMS",
       numbered: true,

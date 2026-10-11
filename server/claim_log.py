@@ -29,9 +29,14 @@ class ClaimLog:
 
         self.path.write_text(json.dumps(self.entries), encoding="utf-8")
 
-    def record(self, sentence: str, verdict: Dict, project: Optional[str]) -> None:
+    def record(self, sentence: str, verdict: Dict, project: Optional[str], document: Optional[str] = None) -> None:
 
-        if verdict.get("label") not in ("supports", "contradicts"):
+        """
+        Keeps the latest verdict for a sentence: supported, contradicted, a misquote, or a claim
+        that needs a source, with the details the pre-submission report and research trail use.
+        """
+
+        if verdict.get("label") not in ("supports", "contradicts", "misquote", "needs_source"):
             return
         self.entries[sentence] = {
             "sentence": sentence,
@@ -41,6 +46,14 @@ class ClaimLog:
             "page": verdict.get("page"),
             "time": verdict.get("time"),
             "project": project,
+            "document": document or self.entries.get(sentence, {}).get("document"),
+            "misquote": bool(verdict.get("misquote")),
+            "too_close": bool(verdict.get("too_close")),
+            "wrong_numbers": verdict.get("wrong_numbers") or [],
+            "changes": verdict.get("changes") or [],
+            "mixed": verdict.get("mixed"),
+            "together_with": verdict.get("together_with"),
+            "closest": verdict.get("closest") or [],
             "at": self.entries.get(sentence, {}).get("at") or time.time(),
         }
         self.save()

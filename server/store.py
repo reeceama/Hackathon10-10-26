@@ -1,6 +1,7 @@
 import json
 import os
 import threading
+import time
 from typing import Dict, List, Optional
 
 import numpy as np
@@ -98,6 +99,8 @@ def keep(url: str, project: Optional[str] = None) -> bool:
     with _lock:
         for p in _passages:
             if p["source"].get("url") == url:
+                if not p["source"].get("kept"):
+                    p["source"]["kept_at"] = time.time()  # for the research trail
                 p["source"]["kept"] = True
                 if project:
                     p["source"]["project"] = project

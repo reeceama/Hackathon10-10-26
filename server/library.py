@@ -100,3 +100,166 @@ def report(sources: List[Dict], claims: List[Dict], project: Optional[str], styl
 as they were written. Both are kept on this computer. This report shows the research behind the writing; it is not tamper-proof.</p>
 <p class="note">To keep a copy, print this page (Cmd+P) and choose "Save as PDF".</p>
 </body></html>"""
+
+
+PAGE_STYLE = """
+  :root { --text: #1f2328; --muted: #6b7280; --line: #e5e7eb; --page: #ffffff; --good: #1a7f37; --warn: #9a6700; --bad: #cf222e; }
+  @media (prefers-color-scheme: dark) { :root { --text: #e6e6e6; --muted: #9aa0a6; --line: #30363d; --page: #0d1117; --good: #3fb950; --warn: #d29922; --bad: #f85149; } }
+  @media print { :root { --text: #1f2328; --muted: #6b7280; --line: #e5e7eb; --page: #ffffff; } }
+  body { font: 14px/1.5 -apple-system, "Segoe UI", sans-serif; color: var(--text); background: var(--page); max-width: 920px; margin: 32px auto; padding: 0 20px; }
+  h1 { font-size: 22px; margin-bottom: 4px; } h2 { font-size: 16px; margin-top: 28px; } h3 { font-size: 14px; margin: 18px 0 6px; }
+  .meta, .note, .muted { color: var(--muted); font-size: 12px; }
+  .good { color: var(--good); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .bar { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0 2px; background: var(--line); }
+  .bar span { display: block; }
+  ul { padding-left: 20px; } li { margin: 6px 0; }
+  q { font-style: italic; }
+  table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+"""
+
+
+def page(title: str, body: str) -> str:
+
+    return f"""<!doctype html><html lang="en-GB"><head><meta charset="utf-8"><title>{html.escape(title)}</title>
+<style>{PAGE_STYLE}</style></head><body>{body}
+<p class="note">Made by Referee from what it recorded on this computer. To keep a copy, print this page (Cmd+P) and choose "Save as PDF".</p>
+</body></html>"""
+
+
+def balance(claims: List[Dict]) -> str:
+
+    """
+    A bar and a line: how many claims are backed, contradicted, or need a source.
+    """
+
+    backed = sum(c["label"] == "supports" for c in claims)
+    against = sum(c["label"] == "contradicts" for c in claims)
+    unsupported = sum(c["label"] == "needs_source" for c in claims)
+    total = backed + against + unsupported
+    if not total:
+        return "<p class='muted'>No claims checked yet.</p>"
+    share = lambda n: 100 * n / total
+    return (f"<div class='bar'><span style='width:{share(backed)}%;background:var(--good)'></span>"
+            f"<span style='width:{share(against)}%;background:var(--bad)'></span>"
+            f"<span style='width:{share(unsupported)}%;background:var(--warn)'></span></div>"
+            f"<p><b>{round(share(backed))}% of claims backed by your reading</b>: {backed} backed, "
+            f"<span class='bad'>{against} contradicted</span>, <span class='warn'>{unsupported} need a source</span>.</p>")
+
+
+def presubmission(sources: List[Dict], claims: List[Dict], project: Optional[str]) -> str:
+
+    """
+    Before you submit: per document, the balance of the argument and everything worth fixing,
+    then how varied and recent the sources are.
+    """
+
+    e = html.escape
+    name = "All reading" if project is None else project or "No project"
+    mine = [c for c in claims if in_project(c.get("project"), project)]
+    by_url = {s.get("url"): s for s in sources}
+    body = f"<h1>Before you submit: {e(name)}</h1><div class='meta'>{len(mine)} claim{'' if len(mine) == 1 else 's'} checked</div>"
+    if not mine:
+        return page(f"Before you submit: {name}", body + "<p>Nothing has been checked yet. Write in Word with Referee running.</p>")
+
+    documents: Dict[str, List[Dict]] = {}
+    for claim in mine:
+        documents.setdefault(claim.get("document") or "Other writing", []).append(claim)
+    for document, items in sorted(documents.items()):
+        body += f"<h2>{e(document)}</h2>" + balance(items)
+        fixes = []
+        for c in items:
+            sentence = f"<q>{e(c['sentence'])}</q>"
+            source = by_url.get((c.get("source") or {}).get("url")) or c.get("source") or {}
+            if c["label"] == "needs_source":
+                near = "; ".join(e(citations.clean_title(x)) for x in c.get("closest") or [])
+                fixes.append(("warn", "Needs a source", sentence + (f"<br><span class='muted'>Closest in your reading: {near}</span>" if near else "")))
+            if c["label"] == "contradicts":
+                fixes.append(("bad", "Your source says otherwise", f"{sentence}<br><span class='muted'>{e(citations.clean_title(source))}: “{e(c.get('quote') or '')}”</span>"))
+            if c.get("misquote") or c["label"] == "misquote":
+                changed = "; ".join(f"you wrote “{e(x.get('wrote', ''))}”, the source says “{e(x.get('source', ''))}”" for x in c.get("changes") or [])
+                fixes.append(("warn", "Quotation doesn't match the source", sentence + (f"<br><span class='muted'>{changed}</span>" if changed else "")))
+            for figure in c.get("wrong_numbers") or []:
+                fixes.append(("warn", "Check a figure", f"{sentence}<br><span class='muted'>“{e(figure)}” isn't in the source</span>"))
+            if c.get("too_close"):
+                fixes.append(("warn", "Very close to the source's wording", sentence))
+            if c.get("mixed"):
+                fixes.append(("muted", "Mixed evidence", f"{sentence}<br><span class='muted'>{e(citations.clean_title(c['mixed']))} points the other way</span>"))
+            if source.get("retracted"):
+                fixes.append(("bad", "Cites a retracted paper", f"{sentence}<br><span class='muted'>{e(citations.clean_title(source))}</span>"))
+        if fixes:
+            body += "<h3>To look at</h3><ul>" + "".join(f"<li><b class='{kind}'>{e(label)}</b>: {text}</li>" for kind, label, text in fixes) + "</ul>"
+        else:
+            body += "<p class='good'>Nothing to fix: every checked claim is backed and quoted correctly.</p>"
+
+    cited = cited_sources(sources, claims, project)
+    if cited:
+        years = sorted(int(str(s.get("date"))[:4]) for s in cited if str(s.get("date") or "")[:4].isdigit())
+        kinds: Dict[str, int] = {}
+        for s in cited:
+            kind = "PDF" if s.get("type") == "pdf" else "Video" if s.get("type") == "video" else "Web page"
+            kinds[kind] = kinds.get(kind, 0) + 1
+        counts: Dict[str, int] = {}
+        for c in mine:
+            if c["label"] == "supports":
+                url = (c.get("source") or {}).get("url")
+                counts[url] = counts.get(url, 0) + 1
+        top_url, top = max(counts.items(), key=lambda kv: kv[1]) if counts else (None, 0)
+        backed_total = sum(counts.values())
+        body += "<h2>Your sources</h2><ul>"
+        body += f"<li>{len(cited)} source{'' if len(cited) == 1 else 's'} cited: " + ", ".join(f"{n} {k.lower()}{'' if n == 1 else 's'}" for k, n in kinds.items()) + ".</li>"
+        if years:
+            old = sum(time.localtime().tm_year - y > 10 for y in years)
+            body += f"<li>Published {years[0]}–{years[-1]}, median {years[len(years) // 2]}." + (f" <span class='warn'>{old} more than ten years old.</span>" if old else "") + "</li>"
+        if backed_total >= 4 and top / backed_total > 0.5:
+            body += f"<li class='warn'>{top} of {backed_total} backed claims rest on one source ({e(citations.clean_title(by_url.get(top_url) or {}))}). Consider backing some with others.</li>"
+        body += "</ul>"
+    return page(f"Before you submit: {name}", body)
+
+
+def trail(sources: List[Dict], claims: List[Dict], notes: Dict[str, List[Dict]], project: Optional[str]) -> str:
+
+    """
+    The research trail: one timeline of what was read, saved, highlighted and claimed.
+    """
+
+    e = html.escape
+    name = "All reading" if project is None else project or "No project"
+    mine_sources = [s for s in sources if in_project(s.get("project"), project)]
+    by_url = {s.get("url"): s for s in sources}
+    events = []
+    for s in mine_sources:
+        title = e(citations.clean_title(s))
+        if s.get("captured_ts"):
+            events.append((s["captured_ts"], "Read", title))
+        if s.get("kept_at"):
+            events.append((s["kept_at"], "Saved", title))
+        for note in notes.get(s.get("url"), []):
+            events.append((note["at"], "Highlighted", f"<q>{e(note['text'][:200])}</q><br><span class='muted'>{title}</span>"))
+    for c in claims:
+        if not in_project(c.get("project"), project) or not c.get("at"):
+            continue
+        source = by_url.get((c.get("source") or {}).get("url")) or c.get("source") or {}
+        what = {"supports": "Claim backed", "contradicts": "Claim contradicted", "needs_source": "Claim needing a source",
+                "misquote": "Misquote found"}.get(c["label"], "Claim checked")
+        detail = f"<q>{e(c['sentence'])}</q>" + (f"<br><span class='muted'>{e(citations.clean_title(source))}</span>" if source else "")
+        events.append((c["at"], what, detail))
+    events.sort(key=lambda event: event[0])
+    body = f"<h1>Research trail: {e(name)}</h1><div class='meta'>{len(events)} event{'' if len(events) == 1 else 's'}</div>"
+    if not events:
+        return page(f"Research trail: {name}", body + "<p>Nothing recorded yet.</p>")
+    day = None
+    rows = ""
+    for at, what, detail in events:
+        moment = time.localtime(at)
+        today = f"{moment.tm_mday} {time.strftime('%B %Y', moment)}"
+        if today != day:
+            if rows:
+                body += f"<table>{rows}</table>"
+                rows = ""
+            body += f"<h2>{e(today)}</h2>"
+            day = today
+        rows += f"<tr><td style='width:60px'>{time.strftime('%H:%M', moment)}</td><td style='width:150px'><b>{e(what)}</b></td><td>{detail}</td></tr>"
+    body += f"<table>{rows}</table>"
+    return page(f"Research trail: {name}", body)

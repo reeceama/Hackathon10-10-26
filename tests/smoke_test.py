@@ -68,6 +68,18 @@ def server_parts():
     check("proof-of-work report builds", "Proof of work" in report and "Waggle dance" in report)
     client.post("/warnings", json={"document": "Essay.docx", "issues": [{"entry": "A claim.", "note": "Your source says otherwise."}]}, headers=headers)
     check("Word warnings reach the library", client.get("/warnings", headers=headers).json()["Essay.docx"]["issues"][0]["note"] == "Your source says otherwise.")
+    client.post("/highlights", json={"url": "https://referee.test/bees", "text": "The angle of the waggle run relative to vertical shows the direction"}, headers=headers)
+    check("highlights are kept as notes", len(client.get("/highlights?url=https://referee.test/bees", headers=headers).json()) == 1)
+    unrelated = client.post("/check", json={"sentence": "Most of the 2019 survey respondents reported higher energy prices.", "document": "Essay.docx"}, headers=headers).json()
+    claims_now = client.get("/claims", headers=headers).json()
+    check("claims needing a source are logged", unrelated.get("needs_source") and any(c["label"] == "needs_source" and c["document"] == "Essay.docx" for c in claims_now))
+    check("needs-a-source comes with a search link", (unrelated.get("search") or "").startswith("https://scholar.google.com/"))
+    check("Before You Submit builds", "Needs a source" in client.get("/presubmission", headers=headers).text)
+    check("Research Trail builds", "Highlighted" in client.get("/trail", headers=headers).text)
+    check("BibTeX export", "@misc{" in client.get("/export?format=bibtex", headers=headers).text)
+    import bib
+    check("BibTeX and RIS import read links", bib.entries("@article{a,\n  title = {T},\n  doi = {10.1/x},\n}")[0]["link"] == "https://doi.org/10.1/x"
+          and bib.entries("TY  - JOUR\nTI  - T\nUR  - https://x.test/p\nER  - ")[0]["link"] == "https://x.test/p")
     rejected = client.post("/api-key", json={"key": "sk-ant-not-a-real-key"}, headers=headers).json()
     check("a wrong API key is rejected, not saved", rejected.get("ok") is False)
 

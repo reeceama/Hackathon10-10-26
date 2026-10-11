@@ -126,9 +126,9 @@ final class Model: ObservableObject {
 /// The server's JSON API. Requests carry the header the server requires of Referee's apps.
 enum API {
 
-    static func request(_ path: String, body: [String: Any]? = nil) async -> Data? {
+    static func request(_ path: String, body: [String: Any]? = nil, timeout: TimeInterval = 4) async -> Data? {
         let url = path.contains("?") ? URL(string: "\(server.absoluteString)/\(path)")! : server.appendingPathComponent(path)
-        var request = URLRequest(url: url, timeoutInterval: 4)
+        var request = URLRequest(url: url, timeoutInterval: timeout)
         request.setValue("1", forHTTPHeaderField: "X-Referee")
         if let body {
             request.httpMethod = "POST"
@@ -164,8 +164,8 @@ enum API {
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    static func post(_ path: String, _ body: [String: Any]) async -> [String: Any]? {
-        guard let data = await request(path, body: body) else { return nil }
+    static func post(_ path: String, _ body: [String: Any], timeout: TimeInterval = 4) async -> [String: Any]? {
+        guard let data = await request(path, body: body, timeout: timeout) else { return nil }
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 }
@@ -272,7 +272,7 @@ enum BrowserExtension {
     }
 }
 
-let styles = [("apa", "APA 7"), ("harvard", "Harvard"), ("mla", "MLA 9"), ("ieee", "IEEE (Numbered)"), ("ams", "AMS (Numbered)")]
+let styles = [("apa", "APA 7"), ("harvard", "Harvard"), ("mla", "MLA 9"), ("chicago", "Chicago"), ("ieee", "IEEE (Numbered)"), ("ams", "AMS (Numbered)"), ("vancouver", "Vancouver (Numbered)")]
 let keepOptions = [(15, "15 Minutes"), (60, "1 Hour"), (1440, "1 Day")]
 
 struct MenuContent: View {
