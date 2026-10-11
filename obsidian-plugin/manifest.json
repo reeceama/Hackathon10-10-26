@@ -1,9 +1,0 @@
-{
-  "id": "referee",
-  "name": "Referee",
-  "version": "1.0.0",
-  "minAppVersion": "1.4.0",
-  "description": "Checks your writing against the sources you've read. It never writes for you.",
-  "author": "reeceama",
-  "isDesktopOnly": true
-}

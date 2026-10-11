@@ -122,7 +122,7 @@ async function showSaved() {
 
 searchBox.addEventListener("input", showSaved);
 
-// Projects live on the server, so Word, Docs and Obsidian use the same current project.
+// Projects live on the server, so Word and the Mac app use the same current project.
 async function showProject() {
   const fetched = await chrome.runtime.sendMessage({ type: "get", path: "settings" }).catch(() => null);
   if (fetched && !fetched.error) settings = fetched;

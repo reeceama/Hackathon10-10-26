@@ -91,14 +91,12 @@ focus = FocusMode()
  
 app = FastAPI()
 
-# Only Referee's own apps may call this server: the Chrome extension, the Word add-in,
-# Obsidian and the Google Docs sidebar (served from googleusercontent.com). Any other website a person visits is refused, so it can't spend their API
+# Only Referee's own apps may call this server: the browser extension and the Word add-in.
+# Any other website a person visits is refused, so it can't spend their API
 # credit, wipe their reading or see what they've captured.
-REFEREE_ORIGINS = r"^(chrome-extension://[a-p]{32}|https://localhost:3000|app://obsidian\.md|https://[a-z0-9-]+-script\.googleusercontent\.com)$"
-# allow_private_network: Chrome asks before a website (the Google Docs sidebar) may call a
-# server on this computer; only the origins above are told yes.
+REFEREE_ORIGINS = r"^(chrome-extension://[a-p]{32}|https://localhost:3000)$"
 app.add_middleware(CORSMiddleware, allow_origin_regex=REFEREE_ORIGINS,
-                   allow_methods=["*"], allow_headers=["*"], allow_private_network=True)
+                   allow_methods=["*"], allow_headers=["*"])
 
 
 @app.middleware("http")
@@ -269,7 +267,7 @@ def check(req: CheckRequest):
     claim_log.record(sentence, verdict, project)  # for the library and proof of work
     if verdict.get("label") == "supports" and verdict.get("source", {}).get("url"):
         keep(verdict["source"]["url"])  # cited sources are kept automatically
-    # verdict includes "label": "supports" or "contradicts" - Word and Obsidian handle both
+    # verdict includes "label": "supports" or "contradicts" - Word handles both
     return {"match": True, **verdict}
  
  

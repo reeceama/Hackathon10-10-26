@@ -1,5 +1,5 @@
 // Library: everything Referee has captured, the references for what your writing cites (in
-// Word or Obsidian), and the proof-of-work report. Checking happens where you write; this
+// Word), and the proof-of-work report. Checking happens where you write; this
 // page is for looking back over your reading.
 
 const STYLE_KEY = "referee-style";

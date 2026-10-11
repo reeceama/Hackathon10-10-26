@@ -2,7 +2,7 @@
 
 Reading captured during a Focus or while writing is temporary: it can be checked against
 straight away, and is forgotten after keep_minutes unless it is saved for later or cited.
-The current project applies everywhere: captures, checks in Word, Docs and Obsidian.
+The current project applies everywhere: captures, and checks in Word.
 """
 
 import json

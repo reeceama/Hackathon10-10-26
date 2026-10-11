@@ -420,7 +420,7 @@ async function showResearch() {
 }
 
 // In automatic mode, Referee captures reading only while someone is writing - here, in
-// Word or in Obsidian. Typing here tells the backend so (at most once a minute); capture
+// Word. Typing here tells the backend so (at most once a minute); capture
 // stops a few minutes after the typing does.
 let lastSignal = 0;
 function signalWriting() {

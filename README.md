@@ -1,6 +1,6 @@
 # Referee
 
-Referee checks your writing against the sources you have read. A browser extension quietly captures the articles, PDFs and YouTube videos you read while researching, and as you write in Word, Google Docs or Obsidian, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
+Referee checks your writing against the sources you have read. A browser extension quietly captures the articles, PDFs and YouTube videos you read while researching, and as you write in Word, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
 
 It never writes for you. It only checks, credits and warns.
 
@@ -24,7 +24,7 @@ Built in one day for the Invisible AI hackathon on 10 October 2026, where the br
 
 ## 1. What it does
 
-**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default capture runs only while you're writing in Word, Google Docs or Obsidian, or while a macOS Focus is on; it can also be switched on by hand, with a timer that switches it off again.
+**While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default capture runs only while you're writing in Word, or while a macOS Focus is on; it can also be switched on by hand, with a timer that switches it off again.
 
 Captured reading is temporary: it can be cited straight away, and is forgotten after 15 minutes (or an hour, or a day) unless you keep it. **Save for later** in the popup keeps the page you're on, whether or not it was captured, and any source your writing cites is kept automatically. Kept sources belong to the current project, chosen or created in the popup. Projects are kept apart: writing is only checked against its own project's sources, plus any other projects you link it to in the library, where sources can also be moved between projects. Referee never runs in private (Incognito) windows. The popup lists your reading, saved or temporary, and lets you forget any source.
 
@@ -51,7 +51,7 @@ If a sentence makes no claim and nothing you read relates to it, Referee stays s
 ## 2. How it works
 
 ```
-Browser extension ──capture──▶ Backend (your laptop) ◀──check── Word, Google Docs, Obsidian
+Browser extension ──capture──▶ Backend (your laptop) ◀──check── Word
                                 │
                                 ├─ extract.py    article text → overlapping passages
                                 ├─ pdf.py        PDF text, with page numbers
@@ -140,7 +140,6 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 - **The extra checks are rules of thumb.** Whether a sentence needs a source, and what counts as an old source or over-reliance, are simple rules, not evaluated models.
 - **Author metadata is unreliable.** Many pages don't publish a usable author, so the organisation is used instead.
 - **Learning starts from very little.** With only a handful of events the model is easily swayed, which is why it falls back to the evaluated threshold until it has seen both outcomes. Referee doesn't report "ignored" markers: with an invisible tool, leaving a correct marker alone is the normal case, so it isn't evidence the marker was unhelpful.
-- **Google Docs only checks while its sidebar is open,** because Docs doesn't run add-ons in the background. The server accepts requests from any Apps Script sidebar, which is how Google serves them, so another add-on you open could in principle reach it and read your captured reading. Only open add-ons you trust while the server is running.
 - **The skip list is a list.** It covers major banks, payment, login and account pages, but it can't name every private site. The password-box rule catches most of the rest.
 
 ## 6. Repository layout
@@ -179,8 +178,6 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 ├── macapp/                     Referee for Mac: menu bar app that runs the server and Word helper
 ├── word-helper/                background Word helper (AppleScript on macOS, COM on Windows)
 ├── word-addin/                 Word add-in (fallback)
-├── obsidian-plugin/            Obsidian plugin
-├── google-docs/                Google Docs sidebar (Apps Script)
 │
 ├── README.md
 └── .gitignore
@@ -219,7 +216,7 @@ On a Mac, `sh macapp/build.sh` builds **Referee.app** and installs it in `~/Appl
 
 To switch research mode on with a macOS Focus, create two automations in the Shortcuts app: when the Focus turns on, run the shell script `curl -s -X POST localhost:8000/focus -H 'Content-Type: application/json' -d '{"on":true}'`, and when it turns off, the same with `false`.
 
-To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. Start writing in Word and read some sources; anything you read while writing is captured. Open the library from the popup to see your reading and references. For Obsidian, copy `obsidian-plugin/` into your vault as `.obsidian/plugins/referee/` and enable it under Community plugins. For Google Docs, follow `google-docs/README.md`. API docs are at http://localhost:8000/docs while the backend is running.
+To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. Start writing in Word and read some sources; anything you read while writing is captured. Open the library from the popup to see your reading and references. API docs are at http://localhost:8000/docs while the backend is running.
 
 ## 8. API
 

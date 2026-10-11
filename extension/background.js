@@ -111,7 +111,7 @@ const pdfTimers = new Map(); // tab id -> timer
 const pdfsSent = new Set();  // URLs already sent this session
 
 // Research mode on, a macOS Focus has switched it on through the server, or (automatic
-// mode only) Word or Obsidian reports someone writing.
+// mode only) Word reports someone writing.
 async function capturing() {
   const { research, mode } = await chrome.storage.local.get(["research", "mode"]);
   if (research) return true;

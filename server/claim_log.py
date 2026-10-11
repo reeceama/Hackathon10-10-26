@@ -1,7 +1,7 @@
 """Claims the reading has backed or contradicted, kept on this computer.
 
 Every confident verdict from /check is recorded, whichever app the writing is in (Word,
-Obsidian), so the library can show which sources are cited and build the proof-of-work
+the browser), so the library can show which sources are cited and build the proof-of-work
 report. Only the latest verdict for each sentence is kept.
 """
 
