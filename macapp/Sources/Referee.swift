@@ -216,7 +216,7 @@ enum BrowserExtension {
         1. In \(browser ?? "Brave or Chrome"), open the extensions page (it's opening now) and turn on Developer mode.
         2. Click Load unpacked and choose the "extension" folder that Finder is showing.
 
-        The extension collects what you read while you write. Without it, add sources with Add Source….
+        The extension collects what you read while you write. Without it, add sources with Add Source.
         """
         NSWorkspace.shared.activateFileViewerSelecting([installed])
         if let browser {

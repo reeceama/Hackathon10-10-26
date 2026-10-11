@@ -253,7 +253,7 @@ struct LibraryView: View {
     private var readingCard: some View {
         VStack(alignment: .leading, spacing: 0) {
             if library.shown.isEmpty {
-                Text(library.sources.isEmpty ? "Nothing yet. Add sources with Add Source…, or read with the browser extension." : "Nothing matches.")
+                Text(library.sources.isEmpty ? "Nothing yet. Add sources with Add Source, or read with the browser extension." : "Nothing matches.")
                     .font(.callout).foregroundStyle(.secondary)
             }
             ForEach(Array(library.shown.enumerated()), id: \.offset) { index, source in
