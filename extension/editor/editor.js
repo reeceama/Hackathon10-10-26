@@ -303,8 +303,9 @@ function needsSourceCard(sentence, index, closest = []) {
 function renderSummary(matched, unsourced) {
   const count = (test) => matched.filter((item) => test(item.entry.match)).length;
   const supported = count((m) => m.label === "supports" && !m.misquote && !m.too_close);
-  const wording = count((m) => m.misquote || m.too_close);
-  const contradicted = count((m) => m.label === "contradicts" && !m.misquote);
+  const wording = count((m) => m.label !== "contradicts" && (m.misquote || m.too_close));
+  // Each claim counts once: a contradiction outranks a wording problem.
+  const contradicted = count((m) => m.label === "contradicts");
   const needs = unsourced.length;
   const claims = supported + wording + contradicted + needs;
   const pending = [...checks.values()].filter((entry) => entry.state === "pending").length;
