@@ -61,7 +61,10 @@ class Settings:
         # An empty project means the server's current project, chosen in the browser extension.
         marks = settings.get("marks") or ("underline" if settings.get("highlight", True) else "none")
         return {"style": style if style in citations.HEADINGS else "apa", "project": settings.get("project", ""),
-                "marks": marks if marks in ("underline", "highlight", "none") else "underline"}
+                "marks": marks if marks in ("underline", "highlight", "none") else "underline",
+                # Off: supported sentences get a comment suggesting the citation, which the person
+                # types themselves. On: the citation is inserted for them.
+                "auto_cite": bool(settings.get("auto_cite", False))}
 
 
 class DocumentState:
@@ -322,6 +325,16 @@ class Helper:
             if settings["marks"] != "none":
                 state["marked"].append([sentence, settings["marks"]])
             if label == "supports":
+                suggested = self.preview(state, settings["style"], result)
+                if suggested in sentence:  # typed in by the person: list it like any other citation
+                    self.cite(state, settings["style"], result)
+                    continue
+                if not settings["auto_cite"]:
+                    note = (f"Supported by {citations.clean_title(result.get('source') or {})}. "
+                            f"Suggested citation: {suggested}. Type it at the end of the sentence and Referee adds the reference.")
+                    if (start, note) not in existing:
+                        self.word.comment(start, end, note)
+                    continue
                 cited = self.cite(state, settings["style"], result)
                 if cited not in sentence:
                     punctuation = CLOSING.search(sentence)
@@ -355,6 +368,17 @@ class Helper:
         if issues != state.get("reported_warnings"):
             if self.post("/warnings", {"document": Path(name).name, "issues": issues}) is not None:
                 state["reported_warnings"] = issues
+
+    def preview(self, state: Dict, style: str, result: Dict) -> str:
+
+        """
+        The citation a source would get, without recording it as cited.
+        """
+
+        source = result.get("source") or {}
+        url = source.get("url") or citations.clean_title(source)
+        number = state["numbers"].get(url, len(state["numbers"]) + 1)
+        return citations.in_text(style, source, number=number, page=result.get("page"), time=result.get("time"))
 
     def cite(self, state: Dict, style: str, result: Dict) -> str:
 

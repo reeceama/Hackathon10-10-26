@@ -39,7 +39,38 @@
     timer = setTimeout(checkAll, PAUSE);
   });
 
-  let library = "";              // the saved sources last time, to notice new or re-read ones
+  let library = "";
+  let autoCite = false;          // insert supported citations without asking (off unless switched on)
+  const tried = new Set();       // sentences auto-cite has already handled
+  let insertedAny = false;
+
+  // Asks page.js to insert a citation, and waits for how it went ("ok", "editing", ...).
+  let nextId = 0;
+  function insertCite(sentence, key, auto) {
+    const id = ++nextId;
+    return new Promise((resolve) => {
+      const listen = (event) => {
+        if (event.source !== window || event.data?.referee !== "overleaf-inserted" || event.data.id !== id) return;
+        window.removeEventListener("message", listen);
+        if (event.data.outcome === "ok") insertedAny = true;
+        resolve(event.data.outcome);
+      };
+      window.addEventListener("message", listen);
+      window.postMessage({ referee: "overleaf-insert", id, line: lines[sentence], sentence, key, auto }, location.origin);
+      setTimeout(() => { window.removeEventListener("message", listen); resolve("no answer"); }, 3000);
+    });
+  }
+
+  // Auto-cite: supported sentences without a citation get one, except the sentence being edited.
+  async function autoInsert() {
+    if (!autoCite) return;
+    for (const [sentence, { keys, result }] of Object.entries(results)) {
+      const key = keysByUrl[result.source?.url];
+      if (tried.has(sentence) || !result.match || result.label !== "supports" || keys.length || !key) continue;
+      const outcome = await insertCite(sentence, key, true);
+      if (outcome !== "editing") tried.add(sentence);  // the sentence being edited is tried again later
+    }
+  }              // the saved sources last time, to notice new or re-read ones
 
   async function loadKeys() {
     const sources = await ask({ type: "get", path: "sources" });
@@ -86,6 +117,7 @@
     if (alive()) chrome.storage.local.set({ [memory]: { results, compared, library } }).catch(() => {});
     running = false;
     render(found);
+    await autoInsert();
   }
 
   // The line a sentence starts on, found from its first few words (the parsed text loses positions).
@@ -131,7 +163,7 @@
     if (source.retracted) out.push(["bad", `${title(source)} has been retracted.`]);
     if (result.label === "contradicts") out.push(["bad", `Your source says otherwise: “${result.quote}” (${title(source)})`]);
     if (result.label === "supports") {
-      if (!keys.length) out.push(["good", `Supported by ${title(source)}. Cite it:`, key]);
+      if (!keys.length) out.push(["good", `Supported by ${title(source)}. Cite it:`, key, null, null, true]);
       else if (key && !keys.includes(key)) out.push(["warn", `You cite ${keys.join(", ")}, but the reading that supports this is ${title(source)}.`, key]);
       else out.push(["good", `Supported by ${title(source)}${keys.length ? ", which you cite" : ""}.`]);
     }
@@ -150,6 +182,9 @@
     .box { color-scheme: light dark; position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 340px; max-height: 50vh; display: flex; flex-direction: column;
       font: 13px -apple-system, system-ui, sans-serif; color: #1d1d1f; background: #fff; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
     header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-weight: 600; cursor: pointer; }
+    .auto { font-weight: 400; font-size: 12px; margin-left: auto; margin-right: 10px; display: flex; align-items: center; gap: 4px; }
+    .hint { padding: 0 12px 8px; font-size: 12px; color: #8e8e93; }
+    .closed .hint { display: none; }
     .list { overflow-y: auto; padding: 0 12px 10px; }
     .closed .list { display: none; }
     .item { padding: 8px 0; border-top: 1px solid #eee; }
@@ -162,10 +197,19 @@
     button, a { font: inherit; font-size: 12px; margin-left: 4px; }
     code { font-size: 12px; background: #f2f2f7; padding: 1px 4px; border-radius: 4px; }
     @media (prefers-color-scheme: dark) { .box { background: #2c2c2e; color: #f5f5f7; } .item { border-color: #3a3a3c; } code { background: #3a3a3c; } a { color: #64d2ff; } }
-  </style><div class="box closed"><header><span>Referee</span><span class="count"></span></header><div class="list"></div></div>`;
+  </style><div class="box closed"><header><span>Referee</span><label class="auto" title="Add supported citations automatically, except in the sentence you're editing"><input type="checkbox"> Auto-cite</label><span class="count"></span></header><div class="hint" hidden>New citations show as “?” until refs.bib has them: export it from Referee's Library and upload it to Overleaf.</div><div class="list"></div></div>`;
   document.documentElement.append(host);
   const box = shadow.querySelector(".box");
-  shadow.querySelector("header").addEventListener("click", () => box.classList.toggle("closed"));
+  shadow.querySelector("header").addEventListener("click", (event) => {
+    if (!event.target.closest(".auto")) box.classList.toggle("closed");
+  });
+  const autoBox = shadow.querySelector(".auto input");
+  chrome.storage.local.get("overleafAutoCite", (saved) => { autoCite = autoBox.checked = Boolean(saved.overleafAutoCite); });
+  autoBox.addEventListener("change", () => {
+    autoCite = autoBox.checked;
+    if (alive()) chrome.storage.local.set({ overleafAutoCite: autoCite });
+    autoInsert();
+  });
 
   function heading(text) {
     const h = document.createElement("h3");
@@ -184,6 +228,7 @@
     ];
     const all = [...theorems, ...claims, ...notation, ...programming];
     const problems = all.filter(([, f]) => f.some(([kind]) => kind === "warn" || kind === "bad")).length;
+    shadow.querySelector(".hint").hidden = !insertedAny;
     shadow.querySelector(".count").textContent = running ? "checking…" : all.length ? `${problems} to look at, ${all.length - problems} fine` : "nothing yet";
     const list = shadow.querySelector(".list");
     const section = (name, items) => (items.length ? [heading(name), ...items.map(item)] : []);
@@ -207,7 +252,7 @@
       quoted.className = "sentence";
       quoted.textContent = sentence.length > 120 ? `${sentence.slice(0, 117)}…` : sentence;
       item.append(quoted);
-      for (const [kind, message, key, search, bibtex] of notes) {
+      for (const [kind, message, key, search, bibtex, insertable] of notes) {
         const note = document.createElement("div");
         note.className = `note ${kind}`;
         note.textContent = message;
@@ -219,6 +264,17 @@
           copy.textContent = "Copy";
           copy.addEventListener("click", () => navigator.clipboard.writeText(cite).then(() => { copy.textContent = "Copied"; }));
           note.append(" ", code, copy);
+          if (insertable) {
+            const add = document.createElement("button");
+            add.textContent = "Insert";
+            add.title = "Add it to the end of this sentence";
+            add.addEventListener("click", async () => {
+              const outcome = await insertCite(sentence, key, false);
+              add.textContent = outcome === "ok" ? "Inserted" : outcome === "already cited" ? "Already cited" : "Couldn't find it";
+              add.disabled = true;
+            });
+            note.append(add);
+          }
         }
         if (bibtex) {
           const copy = document.createElement("button");

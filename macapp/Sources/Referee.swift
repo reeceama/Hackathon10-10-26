@@ -200,6 +200,12 @@ enum WordSettings {
         set { config["code_folder"] = newValue.isEmpty ? nil : newValue }
     }
 
+    /// Whether the Word helper types citations in itself, or suggests them in a comment (the default).
+    static var autoCite: Bool {
+        get { config["auto_cite"] as? Bool ?? false }
+        set { config["auto_cite"] = newValue }
+    }
+
     /// How the Word helper marks the sentences it checks: "underline", "highlight" or "none"
     /// (citations and comments are added either way).
     static var marks: String {
@@ -496,6 +502,7 @@ struct SettingsView: View {
     @AppStorage("showInMenuBar") private var showInMenuBar = true
     @State private var marks = WordSettings.marks
     @State private var codeFolder = WordSettings.codeFolder
+    @State private var autoCite = WordSettings.autoCite
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -577,7 +584,13 @@ struct SettingsView: View {
                     .labelsHidden()
                     .fixedSize()
                 }
-                Text("Green: supported. Amber: check the wording. Red: contradicted. Underlines show clearly in dark mode, where Word dims highlights. Citations and comments are added either way.")
+                Divider().opacity(0.4)
+                row("Add citations automatically") {
+                    Toggle("Add citations automatically", isOn: Binding(get: { autoCite }, set: { autoCite = $0; WordSettings.autoCite = $0 }))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+                Text("Green: supported. Amber: check the wording. Red: contradicted. Underlines show clearly in dark mode, where Word dims highlights. With automatic citations off, a comment suggests each citation for you to type, so you choose every one.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
