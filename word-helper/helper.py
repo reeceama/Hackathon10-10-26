@@ -1,7 +1,7 @@
 """Referee for Word, running in the background: no add-in and no panel.
 
 Every few seconds it reads the document open in Word. Once you pause, each new finished
-sentence is checked against your reading; supported claims are highlighted and cited,
+sentence is checked against your reading; supported claims are marked and cited,
 problems get a comment, and the reference list at the end is kept up to date. Typing also
 tells the server you're writing, so the browser extension captures what you read.
 
@@ -59,7 +59,9 @@ class Settings:
             settings = {}
         style = settings.get("style", "apa")
         # An empty project means the server's current project, chosen in the browser extension.
-        return {"style": style if style in citations.HEADINGS else "apa", "project": settings.get("project", "")}
+        marks = settings.get("marks") or ("underline" if settings.get("highlight", True) else "none")
+        return {"style": style if style in citations.HEADINGS else "apa", "project": settings.get("project", ""),
+                "marks": marks if marks in ("underline", "highlight", "none") else "underline"}
 
 
 class DocumentState:
@@ -88,6 +90,7 @@ class DocumentState:
         state.setdefault("entries", {})   # url -> its reference entry, for the audit
         state.setdefault("reported", None) # reference check last sent to the library
         state.setdefault("warnings", {})  # sentence -> its warnings, shown in the library
+        state.setdefault("marked", [])    # [sentence, "underline" or "highlight"]: only these are cleared
         state.setdefault("reported_warnings", None)
         return state
 
@@ -198,7 +201,7 @@ class Helper:
         if not self.word.available():
             self.last_text = None
             return
-        # Tell the Word add-in to stay quiet, so the two never mark the same document.
+        # Let the app know the helper is running.
         if time.time() - self.last_heartbeat > PING_SECONDS / 2:
             self.last_heartbeat = time.time()
             self.post("/helper", {})
@@ -216,6 +219,37 @@ class Helper:
             return
         self.check(name, text)
         self.audit(name)
+        self.follow_requests(name, text)
+
+    def follow_requests(self, name: str, text: str) -> None:
+
+        """
+        Carries out requests from Referee's menu, left with the server: "clear-marks" removes the
+        underlines or highlights Referee added in the document open in Word, leaving the person's own.
+        """
+
+        try:
+            request = requests.get(f"{SERVER}/word/request", headers=HEADERS, timeout=5).json().get("request")
+        except (requests.RequestException, ValueError):
+            return
+        if request != "clear-marks":
+            return
+        state = self.state.get(name)
+        writing = writing_part(text)
+        cleared = set()
+        for sentence, how in state["marked"]:
+            start = writing.find(sentence)
+            if start == -1:
+                continue
+            if how == "underline":
+                self.word.underline(start, start + len(sentence), "none")
+            else:
+                self.word.mark(start, start + len(sentence), "none")
+            cleared.add(sentence.split(" (")[0])
+        state["marked"] = []
+        self.state.save()
+        count = len(cleared)
+        self.post("/word/request", {"request": "", "result": f"Removed Referee's marks from {count} sentence{'' if count == 1 else 's'}."})
 
     def audit(self, name: str) -> None:
 
@@ -278,14 +312,23 @@ class Helper:
                 continue
             label = result["label"]
             warn = label == "misquote" or (label == "supports" and (result.get("misquote") or result.get("too_close")))
-            self.word.mark(start, end, "warn" if warn else label if label in ("supports", "contradicts") else "warn")
+            kind = "warn" if warn else label if label in ("supports", "contradicts") else "warn"
+            if settings["marks"] == "underline":
+                self.word.underline(start, end, kind)
+            elif settings["marks"] == "highlight":
+                self.word.mark(start, end, kind)
+            if settings["marks"] != "none":
+                state["marked"].append([sentence, settings["marks"]])
             if label == "supports":
                 cited = self.cite(state, settings["style"], result)
                 if cited not in sentence:
                     punctuation = CLOSING.search(sentence)
                     position = end - (len(punctuation.group()) if punctuation else 0)
                     self.word.insert(position, f" {cited}")
-                    checked.add(sentence[:position - start] + f" {cited}" + sentence[position - start:])
+                    with_citation = sentence[:position - start] + f" {cited}" + sentence[position - start:]
+                    checked.add(with_citation)
+                    if settings["marks"] != "none":
+                        state["marked"].append([with_citation, settings["marks"]])
 
         state["checked"] = sorted(checked)
         self.update_references(state, settings["style"])

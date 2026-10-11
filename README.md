@@ -55,7 +55,7 @@ Banking, payment, login and account pages, email, social media, search results a
 
 Referee also warns when a figure in the sentence isn't in the source, shows exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. The library summarises how many claims your reading backs, and flags leaning heavily on one source.
 
-In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are highlighted and cited, a reference list is kept at the end, and warnings become comments. The Word add-in does the same from a panel, and stands down while the helper runs; it adds citations and a reference list through Word's own source manager, so they can be edited with Word's References tools, and warnings appear as comments. The library, a window in Referee for Mac (and a page in the extension), lists everything you've read, manages projects, and gives the reference list for what you've cited in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
+In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are marked and cited, a reference list is kept at the end, and warnings become comments (and are listed in the library). Sentences are marked with coloured underlines (green supported, amber check the wording, red contradicted), or highlights, or nothing, as chosen in settings; **Remove Marks in Word** in the menu bar clears Referee's marks, leaving your own. The library, a window in Referee for Mac (and a page in the extension), lists everything you've read, manages projects, and gives the reference list for what you've cited in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
 
 If a sentence makes no claim and nothing you read relates to it, Referee stays silent rather than guessing.
 
@@ -185,7 +185,6 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── package.sh              builds the downloadable app, with its own Python
 │   └── make_icon.py            draws the app and extension icons
 ├── word-helper/                background Word helper (AppleScript on macOS, COM on Windows)
-├── word-addin/                 Word add-in (fallback)
 ├── scripts/install-windows.bat starts Referee at login on Windows
 ├── assets/                     README icon and link preview image
 ├── .github/workflows/test.yml  runs the tests on Windows and macOS after every push
@@ -210,8 +209,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 ```bash
-# start everything: the server, the Word helper and (with its certificates) the Word add-in's
-# server. The first run downloads the embedding model (about 90 MB).
+# start everything: the server and the Word helper. The first run downloads the embedding
+# model (about 90 MB).
 python referee.py
 
 # or just the server
@@ -248,7 +247,8 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `POST /sources/keep` | `{url, project}` | keeps a source (save for later) |
 | `POST /sources/move` | `{url, project}` | moves a source to another project |
 | `GET /settings`, `POST /settings` | `{project, projects, keep_minutes, links}` | current project, project list, how long unsaved reading is kept |
-| `POST /helper` | | heartbeat from the Word helper, so the add-in stands down |
+| `POST /helper` | | heartbeat from the Word helper, so the app can show whether it's running |
+| `GET /word/request`, `POST /word/request` | `{request, result}` | a request for the Word helper (such as removing highlights) and its reply |
 | `POST /feedback` | `{event, sentence, url, label, confidence, score}` | `{ok}` |
 | `GET /feedback` | | what the model has learned so far |
 | `POST /feedback/reset` | | clears learned behaviour |

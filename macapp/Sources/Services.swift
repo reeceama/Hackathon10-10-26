@@ -1,7 +1,7 @@
 import Foundation
 
-/// Runs referee.py, the cross-platform launcher for Referee's Python parts (the server, the Word
-/// helper and the Word add-in's HTTPS server), while the app is open. The launcher restarts any
+/// Runs referee.py, the cross-platform launcher for Referee's Python parts (the server and the
+/// Word helper), while the app is open. The launcher restarts any
 /// part that stops; this restarts the launcher itself if it stops, and stops it when the app quits.
 final class Services {
 

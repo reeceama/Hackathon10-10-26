@@ -9,7 +9,9 @@ from typing import List, Optional, Tuple
 import pythoncom
 import win32com.client
 
-COLOURS = {"supports": 4, "warn": 7, "contradicts": 6}  # wdBrightGreen, wdYellow, wdRed
+COLOURS = {"supports": 4, "warn": 7, "contradicts": 6, "none": 0}  # wdBrightGreen, wdYellow, wdRed, wdNoHighlight
+# wdUnderlineSingle 1, wdUnderlineWavy 11, wdUnderlineNone 0, with RGB colours.
+UNDERLINES = {"supports": (1, (40, 167, 69)), "warn": (11, (230, 160, 0)), "contradicts": (11, (220, 53, 69)), "none": (0, None)}
 
 
 class WindowsWord:
@@ -49,6 +51,15 @@ class WindowsWord:
     def mark(self, start: int, end: int, kind: str) -> None:
 
         self._doc().Range(start, end).HighlightColorIndex = COLOURS[kind]
+
+    def underline(self, start: int, end: int, kind: str) -> None:
+
+        style, colour = UNDERLINES[kind]
+        font = self._doc().Range(start, end).Font
+        font.Underline = style
+        if colour is not None:
+            red, green, blue = colour
+            font.UnderlineColor = red + green * 256 + blue * 65536
 
     def insert(self, position: int, text: str) -> None:
 

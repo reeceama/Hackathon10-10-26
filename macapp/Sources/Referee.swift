@@ -171,20 +171,53 @@ enum WordSettings {
 
     static let file = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".referee/config.json")
 
-    static var style: String {
+    private static var config: [String: Any] {
         get {
             guard let data = try? Data(contentsOf: file),
-                  let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return "apa" }
-            return config["style"] as? String ?? "apa"
+                  let config = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+            return config
         }
         set {
-            var config: [String: Any] = [:]
-            if let data = try? Data(contentsOf: file),
-               let existing = try? JSONSerialization.jsonObject(with: data) as? [String: Any] { config = existing }
-            config["style"] = newValue
             try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if let data = try? JSONSerialization.data(withJSONObject: config, options: .prettyPrinted) { try? data.write(to: file) }
+            if let data = try? JSONSerialization.data(withJSONObject: newValue, options: .prettyPrinted) { try? data.write(to: file) }
         }
+    }
+
+    static var style: String {
+        get { config["style"] as? String ?? "apa" }
+        set { config["style"] = newValue }
+    }
+
+    /// How the Word helper marks the sentences it checks: "underline", "highlight" or "none"
+    /// (citations and comments are added either way).
+    static var marks: String {
+        get { config["marks"] as? String ?? ((config["highlight"] as? Bool ?? true) ? "underline" : "none") }
+        set { config["marks"] = newValue }
+    }
+
+    /// Asks the Word helper to remove the underlines or highlights Referee added, and shows what it did.
+    static func removeMarks() {
+        Task { @MainActor in
+            _ = await API.post("word/request", ["request": "clear-marks", "result": ""])
+            for _ in 0..<20 {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                let status = await API.get("word/request")
+                if (status?["request"] as? String ?? "").isEmpty, let result = status?["result"] as? String, !result.isEmpty {
+                    show("Marks removed", result)
+                    return
+                }
+            }
+            _ = await API.post("word/request", ["request": "", "result": ""])
+            show("Couldn't remove marks", "Open the document in Word and try again. The Word helper only works on the document in front.")
+        }
+    }
+
+    @MainActor private static func show(_ title: String, _ text: String) {
+        let alert = NSAlert()
+        alert.messageText = title
+        alert.informativeText = text
+        NSApp.activate(ignoringOtherApps: true)
+        alert.runModal()
     }
 }
 
@@ -278,6 +311,7 @@ struct MenuContent: View {
         }
         Divider()
         Button("Add Source…") { show("add-source") }
+        Button("Remove Marks in Word") { WordSettings.removeMarks() }
         Button("Install Browser Extension…") { BrowserExtension.install(repo: repo) }
         Button("Open Library") { show("library") }
         Button("Settings…") { show("settings") }
@@ -447,6 +481,8 @@ struct NewProjectView: View {
 struct SettingsView: View {
 
     @ObservedObject var model: Model
+    @AppStorage("showInMenuBar") private var showInMenuBar = true
+    @State private var marks = WordSettings.marks
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -502,6 +538,20 @@ struct SettingsView: View {
                     .fixedSize()
                     .glassButton()
                 }
+                Divider().opacity(0.4)
+                row("Mark sentences with") {
+                    Picker("Mark sentences with", selection: Binding(get: { marks }, set: { marks = $0; WordSettings.marks = $0 })) {
+                        Text("Underline").tag("underline")
+                        Text("Highlight").tag("highlight")
+                        Text("Nothing").tag("none")
+                    }
+                    .labelsHidden()
+                    .fixedSize()
+                }
+                Text("Green: supported. Amber: check the wording. Red: contradicted. Underlines show clearly in dark mode, where Word dims highlights. Citations and comments are added either way.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             card(title: "Anthropic", symbol: "key") {
                 ApiKeyView(model: model)
@@ -511,6 +561,18 @@ struct SettingsView: View {
                     Toggle("Open Referee at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
                         .toggleStyle(.switch)
                         .labelsHidden()
+                }
+                Divider().opacity(0.4)
+                row("Show in menu bar") {
+                    Toggle("Show in menu bar", isOn: $showInMenuBar)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+                if !showInMenuBar {
+                    Text("Referee keeps working in the background. Open it from Applications or Spotlight to get back here.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
@@ -747,10 +809,11 @@ struct RefereeApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var model = Model()
+    @AppStorage("showInMenuBar") private var showInMenuBar = true
     let repo = repository
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $showInMenuBar) {
             MenuContent(model: model, repo: repo)
         } label: {
             // The whistle: filled while capturing, an outline when idle.

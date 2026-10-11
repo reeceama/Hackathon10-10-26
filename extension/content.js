@@ -15,7 +15,7 @@ function readableHtml() {
   return copy.outerHTML;
 }
 
-// Research mode on, or (automatic mode only) the Word add-in reports someone writing.
+// Research mode on, or (automatic mode only) the Word helper reports someone writing.
 async function capturing() {
   const { research, mode } = await chrome.storage.local.get(["research", "mode"]);
   if (research) return true;

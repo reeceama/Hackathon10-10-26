@@ -8,7 +8,11 @@ a document can change what runs.
 import subprocess
 from typing import List, Optional, Tuple
 
-COLOURS = {"supports": "bright green", "warn": "yellow", "contradicts": "red"}
+COLOURS = {"supports": "bright green", "warn": "yellow", "contradicts": "red", "none": "no highlight"}
+# Underline style and RGB colour (0-255) for each kind of mark. Word for Mac takes colours on a
+# 0-65535 scale, so they're multiplied by 257 when set.
+UNDERLINES = {"supports": ("underline single", (40, 167, 69)), "warn": ("underline wavy", (230, 160, 0)),
+              "contradicts": ("underline wavy", (220, 53, 69)), "none": ("underline none", None)}
 
 
 def _run(script: str, *args: str) -> str:
@@ -64,6 +68,22 @@ class MacWord:
         _run(f'''on run argv
             tell application "Microsoft Word"
                 set highlight color index of (create range active document start (item 1 of argv as integer) end (item 2 of argv as integer)) to {COLOURS[kind]}
+            end tell
+            end run''', start, end)
+
+    def underline(self, start: int, end: int, kind: str) -> None:
+
+        """
+        A coloured underline, like Word's own spelling marks: shows clearly in dark mode, where
+        Word dims highlights. Kind "none" removes it.
+        """
+
+        style, colour = UNDERLINES[kind]
+        _run(f'''on run argv
+            tell application "Microsoft Word"
+                set f to font object of (create range active document start (item 1 of argv as integer) end (item 2 of argv as integer))
+                set underline of f to {style}
+                {"" if colour is None else "set underline color of f to {" + ", ".join(str(c * 257) for c in colour) + "}"}
             end tell
             end run''', start, end)
 

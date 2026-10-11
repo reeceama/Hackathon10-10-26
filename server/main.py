@@ -53,7 +53,7 @@ threading.Thread(target=forget_expired_reading, daemon=True).start()
 class WritingSession:
 
     """
-    Whether someone is writing right now. The Word add-in pings while its panel is open;
+    Whether someone is writing right now. The Word helper pings while you type in Word;
     in automatic mode the browser extension captures reading while this is active.
     """
 
@@ -98,10 +98,11 @@ focus = FocusMode()
  
 app = FastAPI()
 
-# Only Referee's own apps may call this server: the browser extension and the Word add-in.
+# Only Referee's own apps may call this server: the browser extension (the Mac app and the
+# Word helper run on this computer and send no Origin).
 # Any other website a person visits is refused, so it can't spend their API
 # credit, wipe their reading or see what they've captured.
-REFEREE_ORIGINS = r"^(chrome-extension://[a-p]{32}|https://localhost:3000)$"
+REFEREE_ORIGINS = r"^chrome-extension://[a-p]{32}$"
 app.add_middleware(CORSMiddleware, allow_origin_regex=REFEREE_ORIGINS,
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -312,9 +313,43 @@ def writing_status():
             "api_key": api_key.status()["has_key"]}
 
 
+class WordRequest(BaseModel):
+    request: str = ""
+    result: str = ""
+
+
+class WordRequests:
+
+    """
+    A request from Referee's menu for the Word helper (which is the only part that edits Word),
+    and the helper's reply once it's done.
+    """
+
+    def __init__(self):
+
+        self.request = ""
+        self.result = ""
+
+
+word_requests = WordRequests()
+
+
+@app.post("/word/request")
+def set_word_request(req: WordRequest):
+    word_requests.request = req.request
+    if req.result or req.request:
+        word_requests.result = req.result
+    return {"ok": True}
+
+
+@app.get("/word/request")
+def get_word_request():
+    return {"request": word_requests.request, "result": word_requests.result}
+
+
 @app.post("/helper")
 def helper_heartbeat():
-    # The background Word helper is running, so the Word add-in leaves documents to it.
+    # The background Word helper is running (the app shows a warning when it isn't).
     writing.last_helper = time.time()
     return {"ok": True}
 

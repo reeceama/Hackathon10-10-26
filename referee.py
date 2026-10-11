@@ -1,5 +1,4 @@
-"""Runs Referee's background parts on macOS or Windows: the server, the Word helper and, when
-its certificates are installed, the Word add-in's HTTPS server.
+"""Runs Referee's background parts on macOS or Windows: the server and the Word helper.
 
 Each part is restarted if it stops, and all of them stop when this does. Referee for Mac runs
 this; on Windows, scripts/install-windows.bat starts it at login. Logs go to
@@ -35,8 +34,6 @@ def parts():
     found = [("server", "server", ["-m", "uvicorn", "main:app", "--port", "8000"])]
     if sys.platform in ("darwin", "win32"):
         found.append(("helper", "word-helper", ["helper.py"]))
-    if (REPO / "word-addin").exists() and (Path.home() / ".office-addin-dev-certs" / "localhost.crt").exists():
-        found.append(("word", "word-addin", ["server.py"]))
     return found
 
 
