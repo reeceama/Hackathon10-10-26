@@ -27,6 +27,6 @@ server/eval_pr.png
 Thumbs.db
 
 # Built app
-macapp/build/
-macapp/dist/
+macapp/build.noindex/
+macapp/dist.noindex/
 macapp/build-cache/

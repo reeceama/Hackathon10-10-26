@@ -1,7 +1,7 @@
 #!/bin/sh
 # Builds the downloadable Referee for Mac: one app with its own Python, Referee's code and
 # libraries, and the browser extension folder inside, so nothing else needs installing.
-# Output: macapp/dist/Referee.app, Referee-mac.zip (Apple silicon), its .sha256 and Referee-extension.zip.
+# Output: macapp/dist.noindex/Referee.app, Referee-mac.zip (Apple silicon), its .sha256 and Referee-extension.zip.
 #
 # Usage: sh macapp/package.sh RELEASE   e.g. 2026-10-12, or 2026-10-12.2 for a second that day.
 # Publish them as a GitHub release with that name: copies of Referee check for newer releases
@@ -22,14 +22,14 @@ PYTHON_RELEASE=20260924
 PYTHON_FILE="cpython-3.13.15+${PYTHON_RELEASE}-aarch64-apple-darwin-install_only.tar.gz"
 PYTHON_SHA256=a18e1d1b6067d39cf7b2b605fdb78ad6b8a3aed221c44ef934d399dccf355453
 CACHE="$HERE/build-cache/python-$PYTHON_RELEASE"
-DIST="$HERE/dist"
+DIST="$HERE/dist.noindex"  # .noindex: kept out of Spotlight and Launchpad
 APP="$DIST/Referee.app"
 
 # 1. The app itself, built as usual.
 sh "$HERE/build.sh" --no-install
 rm -rf "$DIST"
 mkdir -p "$DIST" "$CACHE"
-cp -R "$HERE/build/Referee.app" "$APP"
+cp -R "$HERE/build.noindex/Referee.app" "$APP"
 /usr/libexec/PlistBuddy -c "Delete :RefereeRepository" "$APP/Contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Add :RefereeRelease string $RELEASE" "$APP/Contents/Info.plist"
 

@@ -4,7 +4,7 @@
 set -e
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$HERE/.." && pwd)"
-BUILD="$HERE/build"
+BUILD="$HERE/build.noindex"  # .noindex: kept out of Spotlight and Launchpad, so only the installed app shows
 APP="$BUILD/Referee.app"
 
 rm -rf "$BUILD"
