@@ -239,7 +239,7 @@ struct NewProjectView: View {
                     .foregroundStyle(.secondary)
                 Text("New Project").font(.title3.weight(.semibold))
             }
-            Text("It becomes the current project: reading you save or cite goes into it.")
+            Text("It becomes the current project, so reading you save or cite goes into it.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
