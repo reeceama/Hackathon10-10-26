@@ -108,7 +108,7 @@ final class LibraryModel: ObservableObject {
     func open(_ page: String, named name: String) {
         Task {
             let query = "\(page)?project=\(filter.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "all")&style=\(style)"
-            guard let html = await API.request(query) else { return }
+            guard let html = await API.request(query, timeout: 30) else { return }
             let file = FileManager.default.temporaryDirectory.appendingPathComponent("Referee \(name).html")
             try? html.write(to: file)
             NSWorkspace.shared.open(file)

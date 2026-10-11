@@ -63,7 +63,7 @@ final class Model: ObservableObject {
 
     /// Checks the key with Anthropic and saves it in the Keychain. Returns a problem, or nil.
     func saveKey(_ key: String) async -> String? {
-        let result = await API.post("api-key", ["key": key])
+        let result = await API.post("api-key", ["key": key], timeout: 30)  // checked with Anthropic first
         refresh()
         if result == nil { return "Referee's server isn't running." }
         return (result?["ok"] as? Bool ?? false) ? nil : result?["reason"] as? String
@@ -71,18 +71,19 @@ final class Model: ObservableObject {
 
     /// Saves a web page, PDF link or YouTube video into the current project. Returns a problem, or nil.
     func addLink(_ link: String) async -> String? {
-        let result = await API.post("sources/add-url", ["url": link])
+        // Reading and indexing a page, PDF or video takes a while: wait up to two minutes.
+        let result = await API.post("sources/add-url", ["url": link], timeout: 120)
         refresh()
-        if result == nil { return "Referee's server isn't running." }
+        if result == nil { return "Referee didn't finish reading it in time. Check the Library: it may still have been added." }
         return (result?["ok"] as? Bool ?? false) ? nil : result?["reason"] as? String ?? "Couldn't read that page."
     }
 
     /// Saves a PDF from this Mac into the current project. Returns a problem, or nil.
     func addPDF(_ file: URL) async -> String? {
         guard let data = try? Data(contentsOf: file) else { return "Couldn't open that file." }
-        let result = await API.post("sources/add-pdf", ["name": file.path, "data": data.base64EncodedString()])
+        let result = await API.post("sources/add-pdf", ["name": file.path, "data": data.base64EncodedString()], timeout: 120)
         refresh()
-        if result == nil { return "Referee's server isn't running." }
+        if result == nil { return "Referee didn't finish reading it in time. Check the Library: it may still have been added." }
         return (result?["ok"] as? Bool ?? false) ? nil : result?["reason"] as? String ?? "Couldn't read that PDF."
     }
 
