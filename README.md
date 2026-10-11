@@ -1,4 +1,6 @@
-# Referee
+<p align="center"><img src="assets/icon.png" alt="Referee" width="128"></p>
+
+<h1 align="center">Referee</h1>
 
 Referee checks your writing against the sources you have read. A browser extension quietly captures the articles, PDFs and YouTube videos you read while researching, and as you write in Word, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
 
