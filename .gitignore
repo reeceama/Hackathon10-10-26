@@ -12,6 +12,7 @@ store.npy
 feedback.json
 claims.json
 reading.json
+verdicts.json
 
 # Evaluation outputs
 server/eval_*.csv

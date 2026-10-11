@@ -1,9 +1,11 @@
 import difflib
 import hashlib
+import json
 import re
 import sys
 import threading
 from collections import Counter, OrderedDict
+from pathlib import Path
 from typing import Literal, Optional
 
 import anthropic
@@ -83,12 +85,20 @@ class VerdictCache:
     """
     Verdicts already paid for. Re-checking the same sentence against the same passages
     (a reload, a re-check, the same sentence in two documents) reuses the earlier answer.
+    Saved to disk, so a restart doesn't pay for them again.
     """
 
-    def __init__(self, size=2000):
+    def __init__(self, size=2000, path=None):
 
         self.size = size
+        self.path = path
         self.verdicts = OrderedDict()
+        if path is not None:
+            try:
+                for key, verdict in json.loads(Path(path).read_text(encoding="utf-8")):
+                    self.verdicts[key] = Verdict(**verdict)
+            except (OSError, ValueError, TypeError):
+                pass
 
     def key(self, system, user):
 
@@ -106,9 +116,12 @@ class VerdictCache:
         self.verdicts.move_to_end(key)
         while len(self.verdicts) > self.size:
             self.verdicts.popitem(last=False)
+        if self.path is not None:
+            items = [[k, v.model_dump()] for k, v in self.verdicts.items()]
+            Path(self.path).write_text(json.dumps(items), encoding="utf-8")
 
 
-cache = VerdictCache()
+cache = VerdictCache(path=Path(__file__).with_name("verdicts.json"))
 
 
 def call_llm(system, user, use_cache=True):
@@ -127,7 +140,9 @@ def call_llm(system, user, use_cache=True):
     response = client.messages.parse(
         model=MODEL,
         max_tokens=1500,  # with thinking on, replies used up to ~700 tokens in testing
-        system=system,
+        # The instructions and reply format (~1,000 tokens) are the same on every check, so
+        # Anthropic caches them: later checks read them at a tenth of the price.
+        system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
         messages=[{"role": "user", "content": user}],
         output_format=Verdict,
         **({} if THINKING else {"thinking": {"type": "disabled"}}),
