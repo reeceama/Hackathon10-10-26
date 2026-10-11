@@ -58,6 +58,18 @@ def first_page_title(text: str) -> Optional[str]:
     return None
 
 
+def page_texts(data: bytes) -> List[str]:
+
+    """
+    Each page's raw text, for matching better text back to pages.
+    """
+
+    try:
+        return [page.extract_text() or "" for page in PdfReader(io.BytesIO(data)).pages]
+    except Exception:
+        return []
+
+
 def extract_pdf(data: bytes, url: Optional[str] = None) -> Tuple[Dict, List[Tuple[str, int]]]:
 
     """

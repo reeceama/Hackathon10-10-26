@@ -51,11 +51,12 @@ def add_page(metadata: Dict, passages: List[str], pages: Optional[List[int]] = N
     return len(passages)
 
 
-def search(sentence: str, k: int = 3, projects: Optional[set] = None) -> List[Dict]:
+def search(sentence: str, k: int = 3, projects: Optional[set] = None, urls: Optional[set] = None) -> List[Dict]:
     """Return the k stored passages that best match the sentence.
 
     projects: only use sources in these projects (None: every source). Projects are kept
     apart, so a piece of writing is only checked against the reading meant for it.
+    urls: only use these sources (None: every source), e.g. the papers a theorem cites.
 
     Combines meaning (embeddings) with keywords (BM25) by reciprocal rank fusion, so a
     passage ranked well by either method is put forward. "score" stays the cosine
@@ -68,6 +69,8 @@ def search(sentence: str, k: int = 3, projects: Optional[set] = None) -> List[Di
     if projects is not None:
         outside = [i for i, p in enumerate(_passages) if p["source"].get("project") not in projects]
         cosine[outside] = -np.inf
+    if urls is not None:
+        cosine[[i for i, p in enumerate(_passages) if p["source"].get("url") not in urls]] = -np.inf
     by_meaning = [i for i in np.argsort(cosine)[::-1][:CANDIDATES] if np.isfinite(cosine[i])]
     keyword_scores = {i: v for i, v in _keywords.scores(sentence).items() if np.isfinite(cosine[i])}
     by_keywords = sorted(keyword_scores, key=keyword_scores.get, reverse=True)[:CANDIDATES]
@@ -144,6 +147,22 @@ def expired(older_than: float) -> List[str]:
         if source.get("kept") is False and captured is not None and captured < older_than:
             urls.add(source.get("url"))
     return sorted(urls)
+
+
+def stored_text(url: str) -> List[str]:
+    """A saved source's passages, in order."""
+    return [p["text"] for p in _passages if p["source"].get("url") == url]
+
+
+def replace(url: str, passages: List[str], pages: Optional[List[int]] = None, changes: Optional[Dict] = None) -> int:
+    """Swap a saved source's passages for new ones (a better text of the same paper), keeping its
+    details: project, saved or temporary, when it was read. Returns how many passages it now has."""
+    old = next((p["source"] for p in _passages if p["source"].get("url") == url), None)
+    if old is None:
+        return 0
+    metadata = {**old, **(changes or {})}
+    forget(url)
+    return add_page(metadata, passages, pages=pages)
 
 
 def forget(url: str) -> int:

@@ -2,11 +2,83 @@
 // commands are left out: Referee checks claims about the literature, not derivations.
 
 const Latex = (() => {
-  const SKIPPED = "equation|align|gather|multline|eqnarray|displaymath|proof|figure|table|tabular|tikzpicture|verbatim|lstlisting|minted|thebibliography";
+  const SKIPPED = "theorem|lemma|proposition|corollary|conjecture|definition|claim|thm|lem|prop|cor|conj|defn|dfn|equation|align|gather|multline|eqnarray|displaymath|proof|figure|table|tabular|tikzpicture|verbatim|lstlisting|minted|thebibliography";
   const CITE = /\\(?:cite|citep|citet|parencite|textcite|autocite|footcite)\*?(?:\[[^\]]*\]){0,2}\{([^}]*)\}/g;
   const ABBREVIATIONS = /\b(e\.g|i\.e|et al|cf|resp|w\.r\.t|etc|vs|Fig|Thm|Def|Prop|Lem|Cor|Sec|Ch|Eq|pp?|no|vol)\./gi;
   const SENTENCE = /[^.!?]+[.!?]+["”’')\]]*/g;
   const MIN_WORDS = 5;
+
+  const RESULTS = ["theorem", "lemma", "proposition", "corollary", "conjecture", "definition", "claim"];
+
+  // Theorem-like environment names, including ones defined with \newtheorem{thm}{Theorem}.
+  function resultNames(text) {
+    const names = new Map(RESULTS.map((r) => [r, r]));
+    for (const m of text.matchAll(/\\newtheorem\*?\{(\w+)\}(?:\[\w+\])?\{([^}]+)\}/g)) {
+      const kind = RESULTS.find((r) => m[2].toLowerCase().startsWith(r));
+      if (kind) names.set(m[1], kind);
+    }
+    return names;
+  }
+
+  // Comments blanked to spaces, so positions (and line numbers) stay the same.
+  const uncommented = (text) => text.replace(/(^|[^\\])(%.*)$/gm, (_, before, comment) => before + " ".repeat(comment.length));
+  const lineAt = (text, index) => text.slice(0, index).split("\n").length;
+
+  // Theorems, lemmas and definitions that cite a paper: [{kind, label, statement, keys, line}].
+  function statements(text) {
+    const clean = uncommented(text);
+    const names = resultNames(clean);
+    const found = [];
+    const pattern = new RegExp(`\\\\begin\\{(${[...names.keys()].join("|")})\\*?\\}(\\[(?:[^\\[\\]]|\\[[^\\]]*\\])*\\])?([\\s\\S]*?)\\\\end\\{\\1\\*?\\}`, "g");
+    for (const m of clean.matchAll(pattern)) {
+      const optional = (m[2] || "").slice(1, -1);
+      const keys = [...(optional + m[3]).matchAll(CITE)].flatMap((c) => c[1].split(",").map((k) => k.trim())).filter(Boolean);
+      if (!keys.length) continue; // the person's own result: nothing to compare with
+      // "[{\cite[Conjecture 1]{key}}]" or "[Bobrowski and Skraba \cite{key}]": the label without the key.
+      const label = optional.replace(/\\\w+\*?((?:\[[^\]]*\]){0,2})\{[^}]*\}/g, (_, notes) => ` ${notes.replace(/[[\]]/g, " ")} `)
+        .replace(/[{}]/g, "").replace(/\s+/g, " ").replace(/^[\s,;()]+|[\s,;()]+$/g, "");
+      const statement = m[3].replace(CITE, "").replace(/\\label\{[^}]*\}/g, "").replace(/\s+/g, " ").trim();
+      found.push({ kind: names.get(m[1]), label, statement, keys, line: lineAt(text, m.index) });
+    }
+    return found;
+  }
+
+  // Notation problems, found without AI: [{line, message}].
+  function notation(text) {
+    const clean = uncommented(text);
+    const issues = [];
+    const labels = new Map();
+    for (const m of clean.matchAll(/\\label\{([^}]+)\}/g)) {
+      if (labels.has(m[1])) issues.push({ line: lineAt(text, m.index), message: `The label “${m[1]}” is used twice, so references to it may point to the wrong place.` });
+      else labels.set(m[1], m.index);
+    }
+    // Labels in other files of the project aren't visible here, so only check single-file documents.
+    if (!/\\(?:input|include|subfile)\{/.test(clean)) {
+      for (const m of clean.matchAll(/\\(?:eq|c|C|auto|page)?ref\{([^}]+)\}/g)) {
+        for (const label of m[1].split(",").map((l) => l.trim())) {
+          if (!labels.has(label)) issues.push({ line: lineAt(text, m.index), message: `\\ref{${label}} points to a label that doesn't exist, so it will show as “??”.` });
+        }
+      }
+    }
+    // A symbol introduced ("Let $X$ be", "denote by $X$", "define $X :=") after it's already been used.
+    const hidden = clean.replace(new RegExp(`\\\\begin\\{(proof|${[...resultNames(clean).keys()].join("|")})\\*?\\}[\\s\\S]*?\\\\end\\{\\1\\*?\\}`, "g"), (m) => " ".repeat(m.length));
+    const introduced = new Map();
+    for (const m of hidden.matchAll(/\b(?:[Ll]et|denote(?:d)? by|[Dd]efine|[Ww]e write|[Ww]rite)\s+\$([^$]+?)\$/g)) {
+      const symbol = m[1].split(/\s*(?:=|:=|\\coloneqq|\\in|\\subset(?:eq)?|\\colon|:|\\to|\\geq?|\\leq?|>|<|,)\s*/)[0].trim();
+      if (symbol && symbol.length <= 20 && !introduced.has(symbol)) introduced.set(symbol, m.index);
+    }
+    const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    for (const [symbol, at] of introduced) {
+      const token = new RegExp(`(?<![A-Za-z\\\\])${escape(symbol)}(?![A-Za-z])`);
+      for (const m of hidden.slice(0, at).matchAll(/\$([^$]+)\$|\\\(([\s\S]+?)\\\)/g)) {
+        if (token.test(m[1] || m[2])) {
+          issues.push({ line: lineAt(text, m.index), message: `$${symbol}$ is used here before it's introduced on line ${lineAt(text, at)}.` });
+          break;
+        }
+      }
+    }
+    return issues.sort((a, b) => a.line - b.line);
+  }
 
   function body(text) {
     const start = text.indexOf("\\begin{document}");
@@ -42,7 +114,7 @@ const Latex = (() => {
     return found;
   }
 
-  return { sentences };
+  return { sentences, statements, notation };
 })();
 
 if (typeof module !== "undefined") module.exports = Latex;

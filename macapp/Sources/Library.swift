@@ -102,6 +102,18 @@ final class LibraryModel: ObservableObject {
     func move(_ url: String, to project: String) { Task { _ = await API.post("sources/move", ["url": url, "project": project]); load() } }
     func keep(_ url: String) { Task { _ = await API.post("sources/keep", ["url": url]); load() } }
     func forget(_ url: String) { Task { _ = await API.delete("sources?url=\(url.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? "")"); load() } }
+    @Published var rereading: Set<String> = []
+
+    /// Reads a saved paper again with its maths and abstract, keeping its project and notes.
+    func reread(_ url: String) {
+        rereading.insert(url)
+        Task {
+            _ = await API.post("sources/reread", ["url": url], timeout: 120)
+            rereading.remove(url)
+            load()
+        }
+    }
+
     func forgetEverything() { Task { _ = await API.post("clear", [:]); load() } }
 
     /// Opens one of the server's report pages (proof of work, before you submit, research trail) in the browser.
@@ -396,6 +408,15 @@ struct LibraryView: View {
                 ForEach(library.projects, id: \.self) { name in Button(name) { library.move(url, to: name) } }
             }
             .fixedSize()
+            if !temporary {
+                if library.rereading.contains(url) {
+                    ProgressView().controlSize(.small)
+                } else {
+                    Button { library.reread(url) } label: { Image(systemName: "arrow.clockwise") }
+                        .buttonStyle(.borderless)
+                        .help("Read again, keeping maths and the abstract")
+                }
+            }
             if let key = source["cite_key"] as? String {
                 Button {
                     NSPasteboard.general.clearContents()

@@ -2,6 +2,8 @@ import json
 import re
 from typing import Dict, List, Optional, Tuple
 
+import lxml.etree
+import lxml.html
 import trafilatura
 
 
@@ -31,10 +33,36 @@ def cut_end_sections(article_text: str) -> str:
         kept.append(line)
     return "\n".join(kept)
 
+RESULT_HEADING = re.compile(r"^(Theorem|Lemma|Proposition|Corollary|Conjecture|Definition|Claim|Assumption)\b.{0,60}$")
+DISPLAYED = re.compile(r"^(\$\$|\\\[|\\begin\{)")
+
+
+def join_maths(lines: List[str]) -> List[str]:
+
+    """
+    Rejoins a maths paper's statements, which pages split over several lines: "Conjecture 1" /
+    "Fix d and k>0. For any S," / a displayed equation / "where ... ." would otherwise be dropped
+    as too short or unfinished, losing exactly the statements worth checking against.
+    """
+
+    joined: List[str] = []
+    carry = False  # the previous line continues into this one
+    for line in (l.strip() for l in lines):
+        if not line:
+            continue
+        continues = carry or DISPLAYED.match(line) or re.match(r"^(where|with|and|for|then|so that)\b", line)
+        if joined and continues:
+            joined[-1] += f" {line}"
+        else:
+            joined.append(line)
+        carry = bool(RESULT_HEADING.match(line) or line.endswith((",", ":", ";")) or DISPLAYED.match(line))
+    return joined
+
+
 def split_sentences(article_text: str) -> List[str]:
     article_text = cut_end_sections(FOOTNOTE_MARKERS.sub("", article_text))
     sentences = []
-    for paragraph in article_text.split("\n"):
+    for paragraph in join_maths(article_text.split("\n")):
         paragraph = paragraph.strip()
         if not paragraph:
             continue
@@ -63,6 +91,51 @@ def make_passages(sentences: List[str], size: int = 3, overlap: int = 1) -> List
     return passages
 
 
+def keep_maths(html: str) -> str:
+
+    """
+    Replaces maths on the page with its TeX, as $...$, so it survives text extraction. Without
+    this a paper's definitions and theorems lose every symbol ("Given a weighted graph , we
+    define ..."). Handles MathJax 2 (TeX kept in a script), MathML with TeX alt text or annotations
+    (Wikipedia, many journals) and MathJax 3's rendered output (removed: the MathML it carries is
+    kept instead). TeX left in the page as \\(...\\) or $$...$$ already survives.
+    """
+
+    if not any(marker in html.lower() for marker in ("math", "mjx", "$$")):
+        return html
+    try:
+        root = lxml.html.fromstring(html)
+    except (ValueError, lxml.etree.ParserError):
+        return html
+
+    def replace(element, tex):
+        span = lxml.html.Element("span")
+        span.text = f" ${' '.join(tex.split())}$ " if tex and tex.strip() else " "
+        span.tail = element.tail
+        element.getparent().replace(element, span)
+
+    for container in root.xpath("//*[local-name()='mjx-container'][.//*[local-name()='math']]"):
+        math = container.xpath(".//*[local-name()='math']")[0]
+        math.tail = container.tail
+        container.getparent().replace(container, math)
+    for script in root.xpath('//script[starts-with(@type, "math/tex")]'):
+        replace(script, script.text or "")
+    for math in root.xpath("//*[local-name()='math']"):
+        if math.getparent() is None:
+            continue
+        annotation = math.xpath(".//*[local-name()='annotation'][contains(@encoding, 'tex')]")
+        tex = math.get("alttext") or (annotation[0].text_content() if annotation else math.text_content())
+        replace(math, tex.strip().removeprefix("{\\displaystyle").removesuffix("}") if tex.strip().startswith("{\\displaystyle") else tex)
+    # Rendered copies of maths now kept as TeX: MathJax 2 and 3 output and previews.
+    for rendered in root.xpath('//*[contains(@class, "MathJax") or contains(@class, "MJX") or local-name()="mjx-container"]'):
+        if rendered.getparent() is not None:
+            rendered.drop_tree()
+    # Displayed equations sit in their own boxes, which extraction treats as page furniture.
+    for box in root.xpath('//div[not(.//p) and not(.//div)][starts-with(normalize-space(.), "$") or starts-with(normalize-space(.), "\\[")]'):
+        box.tag = "p"
+    return lxml.html.tostring(root, encoding="unicode")
+
+
 def extract_page(
     html: str, url: Optional[str] = None
 ) -> Tuple[str, Dict[str, Optional[str]], List[str]]:
@@ -71,7 +144,7 @@ def extract_page(
         raise ValueError("HTML must not be empty.")
 
     extracted = trafilatura.extract(
-        html, url=url, output_format="json", with_metadata=True,
+        keep_maths(html), url=url, output_format="json", with_metadata=True,
         favor_precision=True, include_tables=False,
     )
     if extracted is None:

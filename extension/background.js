@@ -6,7 +6,7 @@ importScripts("skip.js");
 
 const SERVER = "http://localhost:8000";
 const HEADERS = { "Content-Type": "application/json", "X-Referee": "1" };
-const ROUTES = ["check", "feedback"];
+const ROUTES = ["check", "feedback", "statement", "code"];
 const MAX_LOG = 50;
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {

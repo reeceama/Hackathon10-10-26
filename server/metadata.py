@@ -57,6 +57,8 @@ def lookup(doi: str) -> Dict:
         "issue": data.get("issue"),
         "pages": data.get("page") or data.get("article-number"),  # online-only journals number articles
         "doi": doi,
+        # The abstract (JATS XML): pages often leave it out of their main text, where it's missed.
+        "abstract": re.sub(r"\s+", " ", re.sub(r"<jats:title>.*?</jats:title>|<[^>]+>", " ", data.get("abstract") or "")).strip() or None,
     }
     return {k: v for k, v in found.items() if v}
 

@@ -193,6 +193,13 @@ enum WordSettings {
         set { config["style"] = newValue }
     }
 
+    /// A project's code, which Referee checks the writing against: libraries that should be
+    /// cited, and figures that no longer match the results. Empty when none is chosen.
+    static var codeFolder: String {
+        get { config["code_folder"] as? String ?? "" }
+        set { config["code_folder"] = newValue.isEmpty ? nil : newValue }
+    }
+
     /// How the Word helper marks the sentences it checks: "underline", "highlight" or "none"
     /// (citations and comments are added either way).
     static var marks: String {
@@ -488,6 +495,7 @@ struct SettingsView: View {
     @ObservedObject var model: Model
     @AppStorage("showInMenuBar") private var showInMenuBar = true
     @State private var marks = WordSettings.marks
+    @State private var codeFolder = WordSettings.codeFolder
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -574,6 +582,23 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+            card(title: "Code", symbol: "chevron.left.forwardslash.chevron.right") {
+                row("Code folder") {
+                    HStack(spacing: 6) {
+                        if !codeFolder.isEmpty {
+                            Text(URL(fileURLWithPath: codeFolder).lastPathComponent)
+                                .foregroundStyle(.secondary)
+                                .help(codeFolder)
+                            Button("Clear") { codeFolder = ""; WordSettings.codeFolder = "" }.glassButton()
+                        }
+                        Button(codeFolder.isEmpty ? "Choose…" : "Change…", action: chooseCodeFolder).glassButton()
+                    }
+                }
+                Text("The code and results behind your writing. In Overleaf, Referee lists libraries your code uses that should be cited, and figures in your writing that don't match your latest results.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             card(title: "Anthropic", symbol: "key") {
                 ApiKeyView(model: model)
             }
@@ -641,6 +666,17 @@ struct SettingsView: View {
             Spacer()
             control()
         }
+    }
+
+    private func chooseCodeFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+        codeFolder = folder.path
+        WordSettings.codeFolder = folder.path
     }
 }
 

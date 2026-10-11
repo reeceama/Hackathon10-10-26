@@ -15,10 +15,12 @@ from pydantic import BaseModel
 import base64
 
 from extract import extract_page
-from pdf import extract_pdf
+from pdf import extract_pdf, page_texts
+from extract import make_passages, split_sentences
+import fulltext
 from video import extract_video
-from metadata import enrich
-from store import add_page, clear, expired, forget, keep, move, rename_project, search, sources
+from metadata import enrich, lookup
+from store import add_page, clear, expired, forget, keep, move, rename_project, replace, search, sources, stored_text
 from reading import ReadingSettings
 from verify import verify
 from claims import needs_source
@@ -26,6 +28,8 @@ from feedback import FeedbackModel
 import paths
 import library
 import bib
+import statements
+import code_folder as code_check
 import api_key
 from claim_log import ClaimLog
 from highlights import Highlights
@@ -143,6 +147,17 @@ class CheckRequest(BaseModel):
     document: str = ""  # which piece of writing it's from, for the reports
  
  
+class StatementRequest(BaseModel):
+    statement: str     # LaTeX, maths included
+    kind: str = "theorem"
+    keys: list = []    # the citation keys it cites
+    label: str = ""    # its optional title, e.g. "Bobrowski and Skraba, Conjecture 1"
+
+
+class CodeRequest(BaseModel):
+    text: str          # the LaTeX being written
+
+
 class CapturePdfRequest(BaseModel):
     url: str
     project: str = ""
@@ -210,13 +225,29 @@ def stamp(metadata, project):
     metadata["kept"] = False                             # temporary until saved or cited
 
 
+def with_abstract(metadata, texts, pages=None):
+    # The abstract from the DOI lookup goes first, unless the text already has it: abstracts carry
+    # a paper's main claims, which are what writing most often cites.
+    abstract = metadata.pop("abstract", None)
+    if not abstract or abstract[:80].lower() in " ".join(" ".join(texts[:8]).split()).lower():
+        return texts, pages
+    extra = make_passages(split_sentences(abstract))
+    return extra + texts, ([1] * len(extra) + pages) if pages else None
+
+
 @app.post("/capture")
 def capture(req: CaptureRequest):
     try:
-        _, metadata, passages = extract_page(req.html, url=req.url)
+        text, metadata, passages = extract_page(req.html, url=req.url)
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
     enrich(metadata, req.html)  # exact details for academic pages, from their DOI
+    if len(text.split()) < fulltext.MIN_WORDS and (metadata.get("doi") or fulltext.arxiv_id(req.url)):
+        # An abstract page (arXiv, a journal's landing page): read the whole paper instead.
+        better = fulltext.find(req.url, text, metadata.get("title"), metadata.get("doi"))
+        if better and make_passages(split_sentences(better[0])):
+            passages, metadata["text_from"] = make_passages(split_sentences(better[0])), better[1]
+    passages, _ = with_abstract(metadata, passages)
     stamp(metadata, req.project)
     added = add_page(metadata, passages)
     if added == 0:
@@ -226,15 +257,22 @@ def capture(req: CaptureRequest):
  
 @app.post("/capture-pdf")
 def capture_pdf(req: CapturePdfRequest):
+    data = base64.b64decode(req.data)
     try:
-        metadata, passages = extract_pdf(base64.b64decode(req.data), url=req.url)
+        metadata, passages = extract_pdf(data, url=req.url)
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
     if req.title and not metadata.get("title"):
         metadata["title"] = req.title
     enrich(metadata, " ".join(text for text, _ in passages[:5]))
     stamp(metadata, req.project)
-    added = add_page(metadata, [text for text, _ in passages], pages=[page for _, page in passages])
+    texts, pages = [text for text, _ in passages], [page for _, page in passages]
+    # PDF text scrambles maths: use the paper's LaTeX or HTML version when there is one.
+    better = fulltext.passages(req.url, page_texts(data), metadata.get("title"), metadata.get("doi"))
+    if better:
+        texts, pages, metadata["text_from"] = better
+    texts, pages = with_abstract(metadata, texts, pages)
+    added = add_page(metadata, texts, pages=pages)
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
     return {"ok": True, "passages": added}
@@ -311,6 +349,18 @@ def check(req: CheckRequest):
     return {"match": True, **verdict}
  
  
+@app.post("/statement")
+def check_statement(req: StatementRequest):
+    # A theorem or definition taken from a paper, compared with the paper itself.
+    return statements.check(req.statement, req.kind, req.keys, req.label)
+
+
+@app.post("/code")
+def check_code(req: CodeRequest):
+    # The writing against the code folder chosen in settings: uncited libraries, stale figures.
+    return code_check.check(req.text)
+
+
 @app.post("/feedback")
 def record_feedback(req: FeedbackRequest):
     return {"ok": feedback.record(req.model_dump())}
@@ -622,6 +672,48 @@ def add_url(req: CaptureUrlRequest):
     if result.get("ok"):
         keep(url, reading.project or None)
     return result
+
+
+@app.post("/sources/reread")
+def reread(req: CaptureUrlRequest):
+    # Reads a saved paper again, with the maths kept, replacing its old text. Its project, saved
+    # state, highlights and checked claims stay as they were.
+    source = next((s for s in sources() if s.get("url") == req.url), None)
+    if source is None:
+        return {"ok": False, "reason": "That source isn't saved."}
+    texts, pages, where = None, None, None
+    if req.url.startswith("http"):
+        try:
+            response = requests.get(req.url, timeout=30, headers=fulltext.HEADERS)
+            content = response.content if response.ok else b""
+            kind = response.headers.get("content-type", "").lower()
+        except requests.RequestException:
+            content, kind = b"", ""
+        if content[:5] == b"%PDF-" or "pdf" in kind:
+            better = fulltext.passages(req.url, page_texts(content), source.get("title"), source.get("doi"))
+            if better:
+                texts, pages, where = better
+            else:
+                found = extract_pdf(content, url=req.url)[1]
+                texts, pages, where = [t for t, _ in found], [p for _, p in found], "PDF"
+        else:
+            better = fulltext.find(req.url, "", source.get("title"), source.get("doi"))
+            if better:
+                texts, where = make_passages(split_sentences(better[0])), better[1]
+            elif content:
+                try:
+                    texts, where = extract_page(content.decode("utf-8", errors="ignore"), url=req.url)[2], "web page"
+                except ValueError:
+                    pass
+    if not texts and source.get("doi"):
+        # The site blocks programs: keep the saved text, adding the abstract if it's missing.
+        texts, pages, where = stored_text(req.url), None, source.get("text_from") or "earlier copy"
+    if not texts:
+        return {"ok": False, "reason": "Couldn't read it again. Save it from the browser instead."}
+    details = lookup(source["doi"]) if source.get("doi") else {}
+    texts, pages = with_abstract(details, texts, pages)
+    count = replace(req.url, texts, pages, {"text_from": where})
+    return {"ok": True, "passages": count, "text_from": where}
 
 
 @app.post("/sources/add-pdf")

@@ -3,43 +3,76 @@
 // edited; supporting sources come with a \cite{} to copy instead.
 //
 // For a sentence that already cites something, it says whether the cited paper is the one your
-// reading says backs it up.
+// reading says backs it up. Theorems and definitions that cite a paper are compared with the
+// paper's own statement, and notation problems are listed (checked here, without AI). With a code
+// folder chosen in Referee's settings, uncited libraries and figures that don't match the latest
+// results are listed too.
 
 (() => {
   const PAUSE = 3000;            // ms after the last change before checking
   const project = location.pathname.split("/")[2] || "overleaf";
   const memory = `overleaf:${project}`;
   let results = {};              // sentence -> {keys, result}
+  let compared = {};             // statement -> {keys, result}
+  let code = null;               // the code folder check: uncited libraries, stale figures
+  let lines = {};                // sentence or statement -> line, for jumping to it
   let keysByUrl = {};
   let timer = null;
   let running = false;
   let latest = "";
 
+  // After the extension is reloaded, this copy of the script is left behind in open tabs and can no
+  // longer reach Referee. It stops quietly; refreshing the tab loads the new copy.
+  const alive = () => Boolean(globalThis.chrome?.runtime?.id);
+
   const ask = (message) => new Promise((resolve) => {
+    if (!alive()) { resolve(null); return; }
     try { chrome.runtime.sendMessage(message, (reply) => resolve(chrome.runtime.lastError ? null : reply)); }
     catch { resolve(null); } // the extension was reloaded: this page's script is stale
   });
 
-  chrome.storage.local.get(memory, (saved) => { results = saved[memory] || {}; render(); });
 
   window.addEventListener("message", (event) => {
-    if (event.source !== window || event.data?.referee !== "overleaf") return;
+    if (event.source !== window || event.data?.referee !== "overleaf" || !alive()) return;
     latest = event.data.text;
     clearTimeout(timer);
     timer = setTimeout(checkAll, PAUSE);
   });
 
+  let library = "";              // the saved sources last time, to notice new or re-read ones
+
   async function loadKeys() {
     const sources = await ask({ type: "get", path: "sources" });
-    if (Array.isArray(sources)) keysByUrl = Object.fromEntries(sources.map((s) => [s.url, s.cite_key]));
+    if (!Array.isArray(sources)) return;
+    keysByUrl = Object.fromEntries(sources.map((s) => [s.url, s.cite_key]));
+    // The library changed: sentences with no support yet, and comparisons, are worth another look.
+    const now = sources.map((s) => `${s.url}:${s.passages}:${s.text_from || ""}`).sort().join("|");
+    if (library && now !== library) {
+      for (const [sentence, { result }] of Object.entries(results)) if (!result.match) delete results[sentence];
+      compared = {};
+    }
+    library = now;
   }
 
   async function checkAll() {
     if (running) { timer = setTimeout(checkAll, PAUSE); return; }
     running = true;
+    code = await ask({ type: "code", body: { text: latest } });  // no AI: quick, so run every time
     const found = Latex.sentences(latest);
+    const stated_ = Latex.statements(latest);
+    lines = Object.fromEntries(stated_.map((s) => [s.statement, s.line]));
+    for (const { sentence } of found) lines[sentence] ??= lineOf(sentence);
+    await loadKeys();
     const fresh = found.filter(({ sentence }) => !results[sentence]);
-    if (fresh.length) await loadKeys();
+    const unchecked = stated_.filter((s) => !compared[s.statement] || compared[s.statement].keys.join() !== s.keys.join());
+    for (const { kind, label, statement, keys } of unchecked) {
+      const result = await ask({ type: "statement", body: { statement, kind, keys, label } });
+      if (!result || result.error) break;
+      compared[statement] = { keys, kind, label, result };
+      render(found);
+    }
+    const stated = new Set(stated_.map((s) => s.statement));
+    for (const statement of Object.keys(compared)) if (!stated.has(statement)) delete compared[statement];
     for (const { sentence, keys } of fresh) {
       const result = await ask({ type: "check", body: { sentence, document: `${document.title.replace(/ - Overleaf.*$/, "")} (Overleaf)` } });
       if (!result || result.error) break;  // server not running: try again after the next change
@@ -50,9 +83,35 @@
     const present = new Set(found.map((f) => f.sentence));
     for (const sentence of Object.keys(results)) if (!present.has(sentence)) delete results[sentence];
     for (const { sentence, keys } of found) if (results[sentence]) results[sentence].keys = keys;
-    chrome.storage.local.set({ [memory]: results });
+    if (alive()) chrome.storage.local.set({ [memory]: { results, compared, library } }).catch(() => {});
     running = false;
     render(found);
+  }
+
+  // The line a sentence starts on, found from its first few words (the parsed text loses positions).
+  function lineOf(sentence) {
+    const start = sentence.split(/\s+/).slice(0, 4).join(" ");
+    const at = latest.replace(/\s+/g, " ").indexOf(start);
+    if (at < 0) return null;
+    let seen = 0;
+    for (const [i, line] of latest.split("\n").entries()) {
+      seen += line.replace(/\s+/g, " ").length + 1;
+      if (seen > at) return i + 1;
+    }
+    return null;
+  }
+
+  const KINDS = { missing_condition: "Missing condition", extra_condition: "Extra condition", different_conclusion: "Different conclusion", other: "Difference" };
+
+  // What a compared theorem or definition needs telling: [kind, message, key].
+  function comparison({ keys, kind, label, result }) {
+    const name = label || kind;
+    if (result.reason === "not_saved") return [["warn", `Can't compare: ${keys.join(", ")} isn't saved in Referee. Save the paper to check your ${kind} against it.`]];
+    if (result.reason === "no_api_key") return [["warn", "Add an API key in Referee's settings to compare statements with papers."]];
+    if (!result.found) return [["warn", `Couldn't find this ${kind} in ${title(result.source)}. Check you're citing the right paper, or that the saved copy includes it.`]];
+    if (!result.differences?.length) return [["good", `Matches ${title(result.source)}.`]];
+    return result.differences.map((d) => [d.kind === "extra_condition" ? "warn" : "bad", `${KINDS[d.kind] || "Difference"}: ${d.detail}`])
+      .concat([["quote", `The paper (${name}${result.page ? `, p. ${result.page}` : ""}): ${result.quote}`]]);
   }
 
   const title = (source) => (source?.title || source?.url || "a source").replace(/\s+[-|–—]\s+[^-|–—]+$/, "");
@@ -88,7 +147,7 @@
   const host = document.createElement("div");
   const shadow = host.attachShadow({ mode: "closed" });
   shadow.innerHTML = `<style>
-    .box { position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 340px; max-height: 50vh; display: flex; flex-direction: column;
+    .box { color-scheme: light dark; position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 340px; max-height: 50vh; display: flex; flex-direction: column;
       font: 13px -apple-system, system-ui, sans-serif; color: #1d1d1f; background: #fff; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
     header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-weight: 600; cursor: pointer; }
     .list { overflow-y: auto; padding: 0 12px 10px; }
@@ -96,29 +155,59 @@
     .item { padding: 8px 0; border-top: 1px solid #eee; }
     .sentence { color: #6e6e73; font-size: 12px; margin-bottom: 4px; }
     .note { padding-left: 8px; border-left: 3px solid; margin-top: 4px; }
+    h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: #8e8e93; margin: 10px 0 2px; }
+    .jump { cursor: pointer; } .jump:hover .sentence { text-decoration: underline; }
+    .quote { border-color: #8e8e93; color: #6e6e73; font-size: 12px; }
     .good { border-color: #34c759; } .warn { border-color: #ff9f0a; } .bad { border-color: #ff3b30; }
     button, a { font: inherit; font-size: 12px; margin-left: 4px; }
     code { font-size: 12px; background: #f2f2f7; padding: 1px 4px; border-radius: 4px; }
-    @media (prefers-color-scheme: dark) { .box { background: #2c2c2e; color: #f5f5f7; } .item { border-color: #3a3a3c; } code { background: #3a3a3c; } }
+    @media (prefers-color-scheme: dark) { .box { background: #2c2c2e; color: #f5f5f7; } .item { border-color: #3a3a3c; } code { background: #3a3a3c; } a { color: #64d2ff; } }
   </style><div class="box closed"><header><span>Referee</span><span class="count"></span></header><div class="list"></div></div>`;
   document.documentElement.append(host);
   const box = shadow.querySelector(".box");
   shadow.querySelector("header").addEventListener("click", () => box.classList.toggle("closed"));
 
+  function heading(text) {
+    const h = document.createElement("h3");
+    h.textContent = text;
+    return h;
+  }
+
   function render(found) {
     const order = found ? found.map((f) => f.sentence) : Object.keys(results);
-    const items = order.filter((s) => results[s]).map((s) => [s, findings(results[s].keys, results[s].result)]).filter(([, f]) => f.length);
-    const problems = items.filter(([, f]) => f.some(([kind]) => kind !== "good")).length;
-    shadow.querySelector(".count").textContent = running ? "checking…" : items.length ? `${problems} to look at, ${items.length - problems} fine` : "nothing yet";
+    const claims = order.filter((s) => results[s]).map((s) => [s, findings(results[s].keys, results[s].result)]).filter(([, f]) => f.length);
+    const theorems = Object.entries(compared).map(([s, c]) => [s, comparison(c)]);
+    const notation = latest ? Latex.notation(latest).map((n) => [`Line ${n.line}`, [["warn", n.message]], n.line]) : [];
+    const programming = !code?.folder ? [] : [
+      ...(code.software || []).map((s) => [`${s.name} (used in ${s.file})`, [["warn", `Your code uses ${s.name}, which asks to be cited, but your writing doesn't cite it. Add its BibTeX to your .bib file, then cite it with`, s.key, null, s.bibtex]]]),
+      ...(code.numbers || []).map((n) => [`Line ${n.line}: ${n.wrote}`, [["warn", `${n.wrote} isn't in your results. The closest is ${n.closest} in ${n.file} (updated ${n.modified}). Re-run since you wrote it?`]], n.line]),
+    ];
+    const all = [...theorems, ...claims, ...notation, ...programming];
+    const problems = all.filter(([, f]) => f.some(([kind]) => kind === "warn" || kind === "bad")).length;
+    shadow.querySelector(".count").textContent = running ? "checking…" : all.length ? `${problems} to look at, ${all.length - problems} fine` : "nothing yet";
     const list = shadow.querySelector(".list");
-    list.replaceChildren(...items.map(([sentence, notes]) => {
+    const section = (name, items) => (items.length ? [heading(name), ...items.map(item)] : []);
+    list.replaceChildren(...section("Theorems and definitions", theorems), ...section("Claims", claims), ...section("Notation", notation), ...section("Code", programming));
+  }
+
+  function item([sentence, notes, line]) {
+    {
       const item = document.createElement("div");
       item.className = "item";
+      const at = line ?? lines[sentence];
+      if (at) {
+        item.classList.add("jump");
+        item.title = `Go to line ${at}`;
+        item.addEventListener("click", (event) => {
+          if (event.target.closest("button, a")) return;
+          window.postMessage({ referee: "overleaf-goto", line: at }, location.origin);
+        });
+      }
       const quoted = document.createElement("div");
       quoted.className = "sentence";
       quoted.textContent = sentence.length > 120 ? `${sentence.slice(0, 117)}…` : sentence;
       item.append(quoted);
-      for (const [kind, message, key, search] of notes) {
+      for (const [kind, message, key, search, bibtex] of notes) {
         const note = document.createElement("div");
         note.className = `note ${kind}`;
         note.textContent = message;
@@ -131,6 +220,12 @@
           copy.addEventListener("click", () => navigator.clipboard.writeText(cite).then(() => { copy.textContent = "Copied"; }));
           note.append(" ", code, copy);
         }
+        if (bibtex) {
+          const copy = document.createElement("button");
+          copy.textContent = "Copy BibTeX";
+          copy.addEventListener("click", () => navigator.clipboard.writeText(bibtex).then(() => { copy.textContent = "Copied"; }));
+          note.append(copy);
+        }
         if (search) {
           const link = document.createElement("a");
           link.href = search; link.target = "_blank"; link.textContent = "Search Scholar";
@@ -139,6 +234,12 @@
         item.append(note);
       }
       return item;
-    }));
+    }
   }
+
+  // Earlier results for this project, so reopening it doesn't pay for checks again.
+  chrome.storage.local.get(memory, (saved) => {
+    ({ results = {}, compared = {}, library = "" } = saved[memory]?.results ? saved[memory] : { results: saved[memory] || {} });
+    render();
+  });
 })();
