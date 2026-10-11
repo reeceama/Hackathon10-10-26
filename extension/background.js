@@ -45,6 +45,10 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       .catch(() => reply(false));
     return true;
   }
+  if (message.type === "sync-research") {
+    checkFocus().then(() => reply({ ok: true }));
+    return true;
+  }
   if (message.type === "sync") {
     syncCaptures().then(() => reply({ ok: true }));
     return true;
@@ -261,9 +265,14 @@ async function forgetEverything() {
 }
 
 // Research mode: on/off, with an optional timer that switches it off automatically.
+// Research mode is one switch, kept by the server, so the popup, Referee's menu bar, its keyboard
+// shortcut and macOS Focus modes all turn the same thing on and off.
 async function setResearch(on, minutes) {
   const until = on && minutes ? Date.now() + minutes * 60 * 1000 : null;
-  await chrome.storage.local.set({ research: on, until });
+  try {
+    await post("focus", { on });
+  } catch { /* server not running: the popup still reflects the choice */ }
+  await chrome.storage.local.set({ research: on, focus: on, until });
   await chrome.alarms.clear("research-off");
   if (until) chrome.alarms.create("research-off", { when: until });
 }
@@ -279,12 +288,18 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // A macOS Focus can switch research mode on through the server; check every minute so the
 // badge shows it.
 async function checkFocus() {
-  let focus = false;
+  let focus;
   try {
     focus = Boolean((await fetch(`${SERVER}/writing`, { headers: HEADERS }).then((r) => r.json())).focus);
-  } catch { /* server not running */ }
-  const { focus: before } = await chrome.storage.local.get("focus");
-  if (focus !== Boolean(before)) await chrome.storage.local.set({ focus });
+  } catch {
+    return;  // server not running: leave things as they are
+  }
+  const { focus: before, research } = await chrome.storage.local.get(["focus", "research"]);
+  if (focus !== Boolean(before) || focus !== Boolean(research)) {
+    // Follow the server: switched off by the shortcut or menu bar means off here too.
+    await chrome.storage.local.set({ focus, research: focus, ...(focus ? {} : { until: null }) });
+    if (!focus) await chrome.alarms.clear("research-off");
+  }
 }
 
 chrome.alarms.create("focus-check", { periodInMinutes: 1 });

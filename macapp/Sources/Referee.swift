@@ -29,6 +29,10 @@ final class Model: ObservableObject {
 
     init() {
         refresh()
+        // The keyboard shortcut changes research mode outside the menu: show it straight away.
+        NotificationCenter.default.addObserver(forName: .researchChanged, object: nil, queue: .main) { _ in
+            Task { @MainActor in self.refresh() }
+        }
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { _ in
             Task { @MainActor in self.refresh() }
         }
@@ -486,8 +490,24 @@ struct SettingsView: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        // The header stays put; the cards scroll beneath it, so the window stays a sensible height.
+        VStack(alignment: .leading, spacing: 14) {
             header
+                .padding(.horizontal, 22)
+                .padding(.top, 4)
+            ScrollView {
+                cards
+                    .padding(.horizontal, 22)
+                    .padding(.bottom, 22)
+            }
+            .scrollIndicators(.automatic)
+        }
+        .frame(width: 400, height: 560)
+        .background(WindowGlass().ignoresSafeArea())
+    }
+
+    private var cards: some View {
+        VStack(alignment: .leading, spacing: 18) {
             card(title: "Reading", symbol: "books.vertical") {
                 row("Project") {
                     HStack(spacing: 8) {
@@ -563,6 +583,10 @@ struct SettingsView: View {
                         .labelsHidden()
                 }
                 Divider().opacity(0.4)
+                row("Research mode shortcut") {
+                    ShortcutRecorder()
+                }
+                Divider().opacity(0.4)
                 row("Show in menu bar") {
                     Toggle("Show in menu bar", isOn: $showInMenuBar)
                         .toggleStyle(.switch)
@@ -576,12 +600,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .padding(.horizontal, 22)
-        .padding(.bottom, 22)
-        .padding(.top, 4)
-        .frame(width: 400)
-        .fixedSize(horizontal: false, vertical: true)
-        .background(WindowGlass().ignoresSafeArea())
     }
 
     private var header: some View {
@@ -783,6 +801,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         services?.startAll()
         Updater.shared.start()
+        Shortcut.shared.start()
         if !openedAtLogin { showSettingsWhenReady(attempts: 20) }
     }
 

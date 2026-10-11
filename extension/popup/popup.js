@@ -201,6 +201,8 @@ async function showServer() {
 }
 
 async function showStatus() {
+  // Research mode may have been switched from Referee's menu bar or shortcut: catch up first.
+  await chrome.runtime.sendMessage({ type: "sync-research" }).catch(() => {});
   const state = await chrome.storage.local.get(["research", "until", "duration", "mode"]);
   research.checked = Boolean(state.research);
   duration.value = state.duration ?? "60";
