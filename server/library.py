@@ -57,7 +57,8 @@ def report(sources: List[Dict], claims: List[Dict], project: Optional[str], styl
     """
 
     name = "All reading" if project is None else project or "No project"
-    when = lambda t: time.strftime("%-d %b %Y, %H:%M", time.localtime(t)) if t else "—"
+    # "%-d" (day without a leading zero) only works on macOS and Linux, so the day is added separately.
+    when = lambda t: f"{time.localtime(t).tm_mday} {time.strftime('%b %Y, %H:%M', time.localtime(t))}" if t else "—"
     read = sorted((s for s in sources if in_project(s.get("project"), project)), key=lambda s: s.get("captured_ts") or 0)
     cited = cited_sources(sources, claims, project)
     numbers = {s.get("url"): i + 1 for i, s in enumerate(cited)}
