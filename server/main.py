@@ -19,6 +19,7 @@ from reading import ReadingSettings
 from verify import verify
 from claims import needs_source
 from feedback import FeedbackModel
+import api_key
 from claim_log import ClaimLog
  
 # Minimum similarity score before a passage is sent to Claude at all.
@@ -138,6 +139,10 @@ class CapturePdfRequest(BaseModel):
 class CaptureVideoRequest(BaseModel):
     url: str
     project: str = ""
+
+
+class ApiKeyRequest(BaseModel):
+    key: str
 
 
 class FocusRequest(BaseModel):
@@ -295,7 +300,8 @@ def writing_ping():
 
 @app.get("/writing")
 def writing_status():
-    return {"active": writing.active(), "focus": focus.on, "helper": writing.helper_running()}
+    return {"active": writing.active(), "focus": focus.on, "helper": writing.helper_running(),
+            "api_key": api_key.status()["has_key"]}
 
 
 @app.post("/helper")
@@ -303,6 +309,21 @@ def helper_heartbeat():
     # The background Word helper is running, so the Word add-in leaves documents to it.
     writing.last_helper = time.time()
     return {"ok": True}
+
+
+@app.get("/api-key")
+def api_key_status():
+    return api_key.status()
+
+
+@app.post("/api-key")
+def api_key_save(req: ApiKeyRequest):
+    return api_key.save(req.key)
+
+
+@app.delete("/api-key")
+def api_key_remove():
+    return api_key.remove()
 
 
 @app.post("/focus")

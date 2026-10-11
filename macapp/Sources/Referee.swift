@@ -19,6 +19,9 @@ final class Model: ObservableObject {
     @Published var temporary = 0
     @Published var style = WordSettings.style
     @Published var openAtLogin = SMAppService.mainApp.status == .enabled
+    @Published var hasKey = true
+    @Published var keyEnds = ""
+    @Published var keySource = ""
 
     var capturing: Bool { focus || writing }
     private var timer: Timer?
@@ -45,6 +48,29 @@ final class Model: ObservableObject {
             temporary = sources.filter { ($0["kept"] as? Bool) == false }.count
             saved = sources.count - temporary
             style = WordSettings.style
+            if let key = await API.get("api-key") {
+                hasKey = key["has_key"] as? Bool ?? false
+                keyEnds = key["ends"] as? String ?? ""
+                keySource = key["source"] as? String ?? ""
+            }
+        }
+    }
+
+    /// Checks the key with Anthropic and saves it in the Keychain. Returns a problem, or nil.
+    func saveKey(_ key: String) async -> String? {
+        let result = await API.post("api-key", ["key": key])
+        refresh()
+        if result == nil { return "Referee's server isn't running." }
+        return (result?["ok"] as? Bool ?? false) ? nil : result?["reason"] as? String
+    }
+
+    func removeKey() {
+        Task {
+            var request = URLRequest(url: server.appendingPathComponent("api-key"))
+            request.httpMethod = "DELETE"
+            request.setValue("1", forHTTPHeaderField: "X-Referee")
+            _ = try? await URLSession.shared.data(for: request)
+            refresh()
         }
     }
 
@@ -177,6 +203,9 @@ struct MenuContent: View {
     var body: some View {
         Text(statusLine)
         Text("\(model.saved) Saved · \(model.temporary) Temporary")
+        if model.online && !model.hasKey {
+            Button("Add API Key…") { show("settings") }
+        }
         Divider()
         Toggle("Research Mode", isOn: Binding(get: { model.focus }, set: { model.setResearch($0) }))
         Menu("Project") {
@@ -214,6 +243,7 @@ struct MenuContent: View {
 
     private var statusLine: String {
         if !model.online { return "Server Not Running" }
+        if !model.hasKey { return "No API Key" }
         let state = model.focus ? "Research Mode On" : model.writing ? "Writing: Capturing" : "Not Capturing"
         return model.helper ? state : "\(state) · Word Helper Not Running"
     }
@@ -339,6 +369,9 @@ struct SettingsView: View {
                     .glassButton()
                 }
             }
+            card(title: "Anthropic", symbol: "key") {
+                ApiKeyView(model: model)
+            }
             card(title: "General", symbol: "gearshape") {
                 row("Open Referee at login") {
                     Toggle("Open Referee at login", isOn: Binding(get: { model.openAtLogin }, set: { model.setOpenAtLogin($0) }))
@@ -392,6 +425,63 @@ struct SettingsView: View {
             Text(label)
             Spacer()
             control()
+        }
+    }
+}
+
+/// Paste-in API key: checked with Anthropic, then kept in the Keychain. The key is never shown again.
+struct ApiKeyView: View {
+
+    @ObservedObject var model: Model
+    @State private var key = ""
+    @State private var problem: String?
+    @State private var checking = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if model.hasKey {
+                HStack {
+                    Label("Key saved, ending …\(model.keyEnds)", systemImage: "checkmark.seal.fill")
+                        .foregroundStyle(.green)
+                    Spacer()
+                    if model.keySource == "password store" {
+                        Button("Remove") { model.removeKey() }.glassButton()
+                    }
+                }
+                if model.keySource == "env" {
+                    Text("From server/.env. Paste a key below to keep it in the Keychain instead.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Referee checks claims with Claude, using your own Anthropic API key. Create one at console.anthropic.com.")
+                    .font(.callout).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: 8) {
+                SecureField(model.hasKey ? "Replace with a new key" : "Paste your API key (sk-ant-…)", text: $key)
+                    .textFieldStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .glassCard()
+                    .onSubmit(save)
+                Button(checking ? "Checking…" : "Save", action: save)
+                    .disabled(key.trimmingCharacters(in: .whitespaces).isEmpty || checking)
+                    .prominentGlassButton()
+            }
+            if let problem {
+                Text(problem).font(.caption).foregroundStyle(.orange)
+            }
+        }
+    }
+
+    private func save() {
+        let entered = key
+        checking = true
+        problem = nil
+        Task {
+            problem = await model.saveKey(entered)
+            checking = false
+            if problem == nil { key = "" }
         }
     }
 }

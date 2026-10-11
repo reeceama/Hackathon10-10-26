@@ -57,6 +57,13 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     post(message.path, message.body || {}).then(reply).catch((error) => reply({ error: String(error) }));
     return true;
   }
+  if (message.type === "delete") {  // the library removes the saved API key
+    fetch(`${SERVER}/${message.path}`, { method: "DELETE", headers: HEADERS })
+      .then((response) => response.json())
+      .then(reply)
+      .catch((error) => reply({ error: String(error) }));
+    return true;
+  }
   if (message.type === "get") {  // the library reads /sources and /claims
     fetch(`${SERVER}/${message.path}`, { headers: HEADERS, cache: "no-store" })
       .then((response) => response.json())

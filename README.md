@@ -193,7 +193,7 @@ source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r server/requirements.txt
 ```
 
-Copy `server/.env.example` to `server/.env` and add your Anthropic API key. Never commit this file.
+Add your Anthropic API key in Referee's settings (the Mac app, or the extension's library on any system). It's checked with Anthropic, then kept in your computer's password store (Keychain or Credential Manager). Alternatively, copy `server/.env.example` to `server/.env` and put the key there. Never commit that file.
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...

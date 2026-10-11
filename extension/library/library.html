@@ -34,6 +34,17 @@
         </div>
       </section>
 
+      <section id="api-key">
+        <div class="section-head"><h2>Anthropic API key</h2><span class="hint" id="key-status"></span></div>
+        <p class="hint" id="key-help">Referee checks claims with Claude, using your own Anthropic API key. Create one at console.anthropic.com. It's checked with Anthropic, then kept in your computer's password store (Keychain or Credential Manager), and never shown again.</p>
+        <div class="new-project">
+          <input id="key-input" type="password" placeholder="Paste your API key (sk-ant-…)" autocomplete="off" />
+          <button id="key-save">Save</button>
+          <button id="key-remove" hidden>Remove</button>
+        </div>
+        <p class="hint" id="key-problem"></p>
+      </section>
+
       <section>
         <div class="section-head">
           <h2>References</h2>

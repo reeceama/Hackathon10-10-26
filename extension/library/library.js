@@ -341,6 +341,48 @@ projectSelect.onchange = () => {
 searchBox.oninput = renderSources;
 document.getElementById("proof").onclick = proofOfWork;
 
+// API key: checked with Anthropic and kept in the system's password store; only its last
+// four characters are ever shown.
+async function showKey() {
+  const status = await get("api-key").catch(() => null);
+  const line = document.getElementById("key-status");
+  const remove = document.getElementById("key-remove");
+  if (!status || status.error) {
+    line.textContent = "Server not running";
+    return;
+  }
+  line.textContent = status.has_key ? `Saved, ending …${status.ends}${status.source === "env" ? " (from server/.env)" : ""}` : "No key yet";
+  line.style.color = status.has_key ? "var(--cited)" : "var(--warn)";
+  document.getElementById("key-input").placeholder = status.has_key ? "Replace with a new key" : "Paste your API key (sk-ant-…)";
+  remove.hidden = !(status.has_key && status.source === "password store");
+}
+
+document.getElementById("key-save").onclick = async () => {
+  const input = document.getElementById("key-input");
+  const problem = document.getElementById("key-problem");
+  const button = document.getElementById("key-save");
+  if (!input.value.trim()) return input.focus();
+  button.disabled = true;
+  button.textContent = "Checking…";
+  const result = await chrome.runtime.sendMessage({ type: "post", path: "api-key", body: { key: input.value } });
+  button.disabled = false;
+  button.textContent = "Save";
+  problem.textContent = result?.ok ? "" : result?.reason || "Couldn't save the key.";
+  problem.style.color = "var(--warn)";
+  if (result?.ok) {
+    input.value = "";
+    toast("Key saved");
+  }
+  showKey();
+};
+document.getElementById("key-input").onkeydown = (event) => { if (event.key === "Enter") document.getElementById("key-save").click(); };
+document.getElementById("key-remove").onclick = async () => {
+  await chrome.runtime.sendMessage({ type: "delete", path: "api-key" });
+  toast("Key removed");
+  showKey();
+};
+showKey();
+
 // Forgetting everything is kept off the popup and needs a typed confirmation.
 const forgetEverything = document.getElementById("forget-everything");
 forgetEverything.onclick = async () => {

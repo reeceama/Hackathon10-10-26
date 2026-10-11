@@ -61,6 +61,8 @@ def server_parts():
     client.post("/settings", json={"project": name}, headers=headers)
     check("project names survive a restart", json.loads((work / "server" / "reading.json").read_text(encoding="utf-8"))["project"] == name)
     check("other websites are refused", client.get("/sources", headers={"Origin": "https://example.com"}).status_code == 403)
+    rejected = client.post("/api-key", json={"key": "sk-ant-not-a-real-key"}, headers=headers).json()
+    check("a wrong API key is rejected, not saved", rejected.get("ok") is False)
 
     from feedback import LogisticModel
     model = LogisticModel().fit([[0.9, 0.8, 0], [0.6, 0.5, 1], [0.95, 0.7, 0], [0.65, 0.55, 1]], [1, 0, 1, 0], [1, 1, 1, 1])

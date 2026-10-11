@@ -7,10 +7,31 @@ from typing import Literal, Optional
 
 import anthropic
 from pydantic import BaseModel
-from dotenv import load_dotenv
 
-load_dotenv()
-client = anthropic.Anthropic(timeout=10.0)  # never leave the writer waiting
+import api_key
+
+
+class Client:
+
+    """
+    The Anthropic client, rebuilt whenever the person's saved API key changes.
+    """
+
+    def __init__(self):
+
+        self.key = None
+        self.client = None
+
+    def get(self):
+
+        key = api_key.get()
+        if key != self.key:
+            self.key = key
+            self.client = anthropic.Anthropic(api_key=key, timeout=10.0) if key else None  # never leave the writer waiting
+        return self.client
+
+
+anthropic_client = Client()
 
 MODEL = "claude-haiku-5-5"
 THRESHOLD = 0.7  # SciFact, current prompt: precision 0.96 (95% CI 0.87-0.99), recall 0.70; 0.6 gave 0.93 and 0.76
@@ -95,6 +116,10 @@ def call_llm(system, user, use_cache=True):
     cached = cache.get(key) if use_cache else None
     if cached is not None:
         return cached
+    client = anthropic_client.get()
+    if client is None:
+        print("[verify] No Anthropic API key: add one in Referee's settings.")
+        return None
     response = client.messages.parse(
         model=MODEL,
         max_tokens=1500,  # the model thinks before answering; replies used up to ~700 tokens in testing
