@@ -21,10 +21,10 @@ It works with Word for Mac (through AppleScript) and Word for Windows (through W
 `~/.referee/config.json` (created on first run):
 
 ```json
-{"style": "apa", "project": ""}
+{"style": "apa"}
 ```
 
-`style` is `apa`, `harvard`, `mla`, `ieee` or `ams`. `project` limits checking to reading saved for that project; leave it empty for all reading.
+`style` is `apa`, `harvard`, `mla`, `ieee` or `ams`. Checking uses the current project chosen in the browser extension's popup.
 
 ## Limits
 

@@ -3,6 +3,7 @@
   "name": "Referee",
   "version": "0.1.0",
   "description": "Checks your writing against the sources you have read.",
+  "incognito": "not_allowed",
   "permissions": [
     "storage",
     "alarms",

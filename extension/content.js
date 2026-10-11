@@ -23,6 +23,16 @@ async function capturing() {
   return Boolean(await chrome.runtime.sendMessage({ type: "writing" }));
 }
 
+// "Save for later" from the popup: hand over the page now, whether or not capture is on.
+chrome.runtime.onMessage.addListener((message, sender, reply) => {
+  if (message.type !== "capture-now") return;
+  if (isSkipped(location.href) || document.querySelector('input[type="password"]')) {
+    reply({ error: "Referee never saves this kind of page." });
+    return;
+  }
+  reply({ url: location.href, title: document.title, html: readableHtml() });
+});
+
 if (!isSkipped(location.href)) {
   let sent = false;
   let visibleMs = 0;
@@ -44,12 +54,25 @@ if (!isSkipped(location.href)) {
 
   // Count only time the tab is actually visible. Checked once a second; the storage
   // lookup in capturing() happens only when the page qualifies, not every tick.
-  const timer = setInterval(() => {
+  function tick() {
     const now = Date.now();
     if (document.visibilityState === "visible") visibleMs += now - last;
     last = now;
     if (visibleMs >= READ_MS) capture().catch(() => {});
-  }, 1000);
+  }
+  let timer = setInterval(tick, 1000);
+
+  // If this page is forgotten (or all reading is cleared) while the tab is still open, start
+  // over, so reading it again captures it again.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes.captures || !sent) return;
+    const still = (changes.captures.newValue || []).some((c) => c.url === location.href);
+    if (still) return;
+    sent = false;
+    visibleMs = 0;
+    nextTry = 0;
+    timer = setInterval(tick, 1000);
+  });
 
   document.addEventListener("mouseup", () => {
     if (String(window.getSelection()).trim().length >= MIN_SELECTION) capture().catch(() => {});

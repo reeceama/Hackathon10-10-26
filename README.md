@@ -26,7 +26,7 @@ Built in one day for the Invisible AI hackathon on 10 October 2026, where the br
 
 **While you research.** Pages are captured only once you've actually read them: a page counts after it has been open and visible for 20 seconds, or as soon as you highlight text on it. Pages you bounce off aren't kept. PDFs are captured with their page numbers, and YouTube videos through their transcripts, with timestamps. By default capture runs only while you're writing in Word, Google Docs or Obsidian, or while a macOS Focus is on; it can also be switched on by hand, with a timer that switches it off again.
 
-Reading can be tagged with a project, so each piece of writing is only checked against its own research. The popup lists everything captured, shows which sources the current piece cites, and lets you forget a single source or have reading expire after 7, 14 or 30 days.
+Captured reading is temporary: it can be cited straight away, and is forgotten after 15 minutes (or an hour, or a day) unless you keep it. **Save for later** in the popup keeps the page you're on, whether or not it was captured, and any source your writing cites is kept automatically. Kept sources belong to the current project, chosen or created in the popup. Projects are kept apart: writing is only checked against its own project's sources, plus any other projects you link it to in the library, where sources can also be moved between projects. Referee never runs in private (Incognito) windows. The popup lists your reading, saved or temporary, and lets you forget any source.
 
 Banking, payment, login and account pages, email, social media, search results and writing tools are never captured, nor is any page with a password box. Before a page leaves the browser tab, every form field, text box and script is removed, so nothing anyone typed is sent.
 
@@ -42,7 +42,7 @@ Banking, payment, login and account pages, email, social media, search results a
 
 Referee also warns when a figure in the sentence isn't in the source, show exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. The library summarises how many claims your reading backs, and flags leaning heavily on one source.
 
-In Word, supported claims get citations and a reference list through Word's own source manager, so they can be edited with Word's References tools, and warnings appear as comments. The extension's library lists everything you've read, which sources your writing cites, and the reference list in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
+In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are highlighted and cited, a reference list is kept at the end, and warnings become comments. The Word add-in does the same from a panel, and stands down while the helper runs; it adds citations and a reference list through Word's own source manager, so they can be edited with Word's References tools, and warnings appear as comments. The extension's library lists everything you've read, which sources your writing cites, and the reference list in APA 7, Harvard, MLA 9, IEEE or AMS, with page numbers for PDFs and timestamps for videos. Its proof-of-work report lists what you read, when, and which claims it backs.
 
 If a sentence makes no claim and nothing you read relates to it, Referee stays silent rather than guessing.
 
@@ -158,6 +158,8 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── verify.py               claim verification, quote, figure and copying checks
 │   ├── feedback.py             learns which markers each person finds useful
 │   ├── claim_log.py            claims each source has backed, for the library
+│   ├── reading.py              projects, and how long unsaved reading is kept
+│   ├── citations.py            citation styles for the Word helper
 │   ├── eval_scifact.py         verifier evaluation on SciFact
 │   ├── eval_wording.py         copying detection calibration
 │   ├── load_demo.py            preloads demo sources
@@ -174,7 +176,8 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── dev/editor/             developer test page for checks (not user facing)
 │   └── icons/
 │
-├── word-addin/                 Word add-in
+├── word-helper/                background Word helper (AppleScript on macOS, COM on Windows)
+├── word-addin/                 Word add-in (fallback)
 ├── obsidian-plugin/            Obsidian plugin
 ├── google-docs/                Google Docs sidebar (Apps Script)
 │
@@ -211,7 +214,7 @@ python eval_scifact.py analyse
 python eval_wording.py
 ```
 
-To have the server and the Word add-in's HTTPS server start whenever you log in, and restart if they stop, run `sh scripts/install-server.sh` once (macOS).
+To have the server, the Word helper and the Word add-in's HTTPS server start whenever you log in, and restart if they stop, run `sh scripts/install-server.sh` once (macOS), or `scripts\install-windows.bat` on Windows (server and helper). See `word-helper/README.md`.
 
 To switch research mode on with a macOS Focus, create two automations in the Shortcuts app: when the Focus turns on, run the shell script `curl -s -X POST localhost:8000/focus -H 'Content-Type: application/json' -d '{"on":true}'`, and when it turns off, the same with `false`.
 
@@ -228,6 +231,10 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `GET /sources`, `DELETE /sources?url=` | | lists captured sources, or forgets one |
 | `GET /claims?project=` | | claims the reading has backed or contradicted, oldest first |
 | `POST /focus` | `{on}` | switches research mode on or off (macOS Focus) |
+| `POST /sources/keep` | `{url, project}` | keeps a source (save for later) |
+| `POST /sources/move` | `{url, project}` | moves a source to another project |
+| `GET /settings`, `POST /settings` | `{project, projects, keep_minutes, links}` | current project, project list, how long unsaved reading is kept |
+| `POST /helper` | | heartbeat from the Word helper, so the add-in stands down |
 | `POST /feedback` | `{event, sentence, url, label, confidence, score}` | `{ok}` |
 | `GET /feedback` | | what the model has learned so far |
 | `POST /feedback/reset` | | clears learned behaviour |

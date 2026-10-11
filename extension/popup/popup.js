@@ -6,9 +6,12 @@ const savedList = document.getElementById("saved-list");
 const savedTitle = document.getElementById("saved-title");
 const savedEmpty = document.getElementById("saved-empty");
 const server = document.getElementById("server");
-const projectInput = document.getElementById("project");
-const projectList = document.getElementById("projects");
-const expiry = document.getElementById("expiry");
+const projectSelect = document.getElementById("project");
+const keepSelect = document.getElementById("keep");
+const saveButton = document.getElementById("save-later");
+const saveResult = document.getElementById("save-result");
+const NEW_PROJECT = "__new__";
+let settings = { project: "", projects: [], keep_minutes: 15 };
 const searchBox = document.getElementById("search");
 
 // A rough guide to what kind of source a page is, from its address.
@@ -24,32 +27,34 @@ function sourceType(url) {
   return found ? found[0] : "Website";
 }
 
-const CAPTURE_STATUS = {
-  saved: (c) => `Saved · ${c.passages} passages`,
-  already: () => "Already saved",
-  skipped: (c) => `Not saved: ${c.reason || "no article text found"}`,
-  offline: () => "Not saved: the server wasn't running",
+
+// Tick and cross drawn with the same stroke, so they match whatever the system font is.
+const ICONS = {
+  keep: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M3 8.5l3.2 3.2L13 4.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  forget: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
 };
 
-// The pages Referee has captured, most recent first, filtered by the search box.
+// Everything Referee holds, most recent first, filtered by the search box. Saved sources stay
+// until forgotten; temporary ones show how long they have left.
 async function showSaved() {
-  const { captures = [] } = await chrome.storage.local.get("captures");
-  // Sources that have backed a claim in Word or Obsidian, from the server's claim log.
-  const claims = await chrome.runtime.sendMessage({ type: "get", path: "claims" }).catch(() => []);
-  const cited = Array.isArray(claims)
-    ? claims.filter((c) => c.label === "supports").map((c) => c.source?.url).filter(Boolean) : [];
+  const [stored, claims] = await Promise.all([
+    chrome.runtime.sendMessage({ type: "get", path: "sources" }).catch(() => null),
+    chrome.runtime.sendMessage({ type: "get", path: "claims" }).catch(() => []),
+  ]);
+  const sources = Array.isArray(stored) ? stored : [];
+  const cited = new Set(Array.isArray(claims)
+    ? claims.filter((c) => c.label === "supports").map((c) => c.source?.url).filter(Boolean) : []);
   const query = searchBox.value.trim().toLowerCase();
-  const shown = captures.filter((c) => !query || `${c.title} ${c.url} ${c.project || ""}`.toLowerCase().includes(query));
+  const shown = sources
+    .filter((c) => !query || `${c.title} ${c.url} ${c.project || ""}`.toLowerCase().includes(query))
+    .sort((a, b) => (b.captured_ts || 0) - (a.captured_ts || 0));
+
   savedList.replaceChildren(...shown.slice(0, 30).map((c) => {
     const item = document.createElement("li");
     const title = document.createElement("span");
     title.className = "t";
-    title.textContent = c.title;
+    title.textContent = c.title || c.url;
     title.title = c.url;
-    const status = document.createElement("span");
-    status.className = "s";
-    status.dataset.status = c.status;
-    status.textContent = (CAPTURE_STATUS[c.status] || (() => c.status))(c);
     const tags = document.createElement("div");
     tags.className = "tags";
     const addTag = (text, extra = "") => {
@@ -58,53 +63,135 @@ async function showSaved() {
       tag.textContent = text;
       tags.append(tag);
     };
-    if (c.status === "saved" || c.status === "already") {
-      addTag(sourceType(c.url));
-      if (c.project) addTag(c.project);
-      addTag(cited.includes(c.url) ? "Cited" : "Not cited yet", cited.includes(c.url) ? "cited" : "");
+    if (c.kept === false) {
+      const left = Math.max(1, Math.round(((c.captured_ts || 0) + settings.keep_minutes * 60 - Date.now() / 1000) / 60));
+      addTag(`Temporary · ${left} min left`, "temp");
+    } else {
+      addTag("Saved", "cited");
     }
+    addTag(c.type === "pdf" ? "PDF" : c.type === "video" ? "Video" : sourceType(c.url));
+    if (c.project) addTag(c.project);
+    if (cited.has(c.url)) addTag("Cited", "cited");
     const forget = document.createElement("button");
     forget.className = "forget-one";
     forget.title = "Forget this page";
-    forget.textContent = "×";
+    forget.innerHTML = ICONS.forget;
+    forget.setAttribute("aria-label", "Forget this page");
     forget.addEventListener("click", async (event) => {
       event.stopPropagation();
+      // Saved pages take two clicks (the first turns the cross red); temporary pages take one.
+      if (c.kept !== false && forget.dataset.armed !== "yes") {
+        forget.dataset.armed = "yes";
+        forget.title = "Click again to forget";
+        setTimeout(() => { forget.dataset.armed = ""; forget.title = "Forget this page"; }, 3000);
+        return;
+      }
       forget.disabled = true;
       item.style.opacity = "0.4";
       try {
         await chrome.runtime.sendMessage({ type: "forget", url: c.url });
       } finally {
-        showSaved();  // redraw even if the storage change isn't reported
+        showSaved();
       }
     });
-    item.append(title, status, tags, forget);
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    if (c.kept === false) {
+      const keep = document.createElement("button");
+      keep.className = "keep-one";
+      keep.title = `Save for later${settings.project ? ` in ${settings.project}` : ""}`;
+      keep.innerHTML = ICONS.keep;
+      keep.setAttribute("aria-label", keep.title);
+      keep.addEventListener("click", async (event) => {
+        event.stopPropagation();
+        keep.disabled = true;
+        await chrome.runtime.sendMessage({ type: "post", path: "sources/keep", body: { url: c.url } });
+        showSaved();
+      });
+      actions.append(keep);
+    }
+    actions.append(forget);
+    item.append(title, tags, actions);
     return item;
   }));
-  const saved = captures.filter((c) => c.status === "saved").length;
-  savedTitle.textContent = saved ? `Saved pages (${saved})` : "Saved pages";
-  savedEmpty.hidden = captures.length > 0;
+  const kept = sources.filter((c) => c.kept !== false).length;
+  savedTitle.textContent = sources.length ? `Your reading (${kept} saved, ${sources.length - kept} temporary)` : "Your reading";
+  savedEmpty.hidden = sources.length > 0;
+  showSaveButton(sources);
 }
 
 searchBox.addEventListener("input", showSaved);
 
-// Reading is kept per project, so one piece of work never cites another's reading.
+// Projects live on the server, so Word, Docs and Obsidian use the same current project.
 async function showProject() {
-  const { project = "", projects = [], expiryDays = "0" } = await chrome.storage.local.get(["project", "projects", "expiryDays"]);
-  projectInput.value = project;
-  projectList.replaceChildren(...projects.map((name) => Object.assign(document.createElement("option"), { value: name })));
-  expiry.value = String(expiryDays);
+  const fetched = await chrome.runtime.sendMessage({ type: "get", path: "settings" }).catch(() => null);
+  if (fetched && !fetched.error) settings = fetched;
+  projectSelect.replaceChildren(
+    new Option("No project", ""),
+    ...settings.projects.map((name) => new Option(name, name)),
+    new Option("New project…", NEW_PROJECT));
+  projectSelect.value = settings.project;
+  keepSelect.value = String(settings.keep_minutes);
 }
 
-projectInput.addEventListener("change", async () => {
-  const project = projectInput.value.trim();
-  const { projects = [] } = await chrome.storage.local.get("projects");
-  await chrome.storage.local.set({ project, projects: project && !projects.includes(project) ? [...projects, project] : projects });
+async function saveSettings(changes) {
+  const saved = await chrome.runtime.sendMessage({ type: "post", path: "settings", body: changes });
+  if (saved && !saved.error) settings = saved;
   showProject();
+  showSaved();
+}
+
+// Chrome doesn't show prompt() in extension popups, so new projects are named in the popup.
+const newProject = document.getElementById("new-project");
+const newProjectName = document.getElementById("new-project-name");
+
+projectSelect.addEventListener("change", () => {
+  newProject.hidden = projectSelect.value !== NEW_PROJECT;
+  if (projectSelect.value !== NEW_PROJECT) return saveSettings({ project: projectSelect.value });
+  newProjectName.value = "";
+  newProjectName.focus();
 });
 
-expiry.addEventListener("change", async () => {
-  await chrome.storage.local.set({ expiryDays: expiry.value });
-  chrome.runtime.sendMessage({ type: "expire" });
+async function createProject() {
+  const name = newProjectName.value.trim();
+  if (!name) return newProjectName.focus();
+  newProject.hidden = true;
+  await saveSettings({ project: name });  // the new project becomes the current one
+}
+
+document.getElementById("new-project-create").addEventListener("click", createProject);
+newProjectName.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") createProject();
+  if (event.key === "Escape") {
+    newProject.hidden = true;
+    showProject();
+  }
+});
+
+keepSelect.addEventListener("change", () => saveSettings({ keep_minutes: Number(keepSelect.value) }));
+
+// "Save for later": keep the page you're on in the current project, whether or not it was captured.
+async function currentTab() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  return tab;
+}
+
+async function showSaveButton(sources) {
+  const tab = await currentTab();
+  const stored = sources.find((c) => c.url === tab?.url);
+  const saved = stored && stored.kept !== false;
+  saveButton.disabled = Boolean(saved);
+  saveButton.textContent = saved ? "Saved for later ✓" : "Save this page for later";
+}
+
+saveButton.addEventListener("click", async () => {
+  saveButton.disabled = true;
+  saveButton.textContent = "Saving…";
+  const result = await chrome.runtime.sendMessage({ type: "save-later", tab: await currentTab() });
+  saveResult.textContent = result?.ok
+    ? `Saved${settings.project ? ` to ${settings.project}` : ""}.`
+    : result?.reason || "Couldn't save this page.";
+  showSaved();
 });
 
 async function showServer() {
@@ -163,16 +250,32 @@ document.getElementById("open-library").addEventListener("click", () => {
   window.close();
 });
 
-document.getElementById("forget").addEventListener("click", async () => {
-  if (!confirm("Forget every saved page? Referee won't be able to cite them any more.")) return;
-  await chrome.runtime.sendMessage({ type: "clear" });
+// Clears reading that hasn't been saved or cited. Saved reading can only be forgotten one
+// source at a time here, or all at once from the library.
+const forgetTemporary = document.getElementById("forget");
+forgetTemporary.addEventListener("click", async () => {
+  // Two clicks: the first asks, a second within 3 seconds forgets.
+  if (forgetTemporary.dataset.armed !== "yes") {
+    forgetTemporary.dataset.armed = "yes";
+    forgetTemporary.textContent = "Click again to forget temporary pages";
+    setTimeout(() => {
+      forgetTemporary.dataset.armed = "";
+      forgetTemporary.textContent = "Forget temporary pages";
+    }, 3000);
+    return;
+  }
+  forgetTemporary.dataset.armed = "";
+  forgetTemporary.textContent = "Forget temporary pages";
+  await chrome.runtime.sendMessage({ type: "post", path: "sources/forget-temporary" });
+  await chrome.runtime.sendMessage({ type: "sync" });
+  showSaved();
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.captures) showSaved();
 });
+setInterval(showSaved, 30000);  // keep "min left" current while the popup is open
 
 showStatus().then(showModeHint);
-showSaved();
-showProject();
+showProject().then(showSaved);
 showServer();

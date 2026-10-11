@@ -6,8 +6,8 @@ problems get a comment, and the reference list at the end is kept up to date. Ty
 tells the server you're writing, so the browser extension captures what you read.
 
 Run: python word-helper/helper.py   (it attaches to Word when Word is open)
-Settings: ~/.referee/config.json, {"style": "apa" | "harvard" | "mla" | "ieee" | "ams",
-"project": ""}.
+Settings: ~/.referee/config.json, {"style": "apa" | "harvard" | "mla" | "ieee" | "ams"}.
+The project is the current one chosen in the browser extension.
 """
 
 import json
@@ -46,7 +46,7 @@ class Settings:
         self.path = HOME / "config.json"
         if not self.path.exists():
             HOME.mkdir(exist_ok=True)
-            self.path.write_text(json.dumps({"style": "apa", "project": ""}, indent=2))
+            self.path.write_text(json.dumps({"style": "apa"}, indent=2))
 
     def load(self) -> Dict:
 
@@ -55,6 +55,7 @@ class Settings:
         except (OSError, ValueError):
             settings = {}
         style = settings.get("style", "apa")
+        # An empty project means the server's current project, chosen in the browser extension.
         return {"style": style if style in citations.HEADINGS else "apa", "project": settings.get("project", "")}
 
 

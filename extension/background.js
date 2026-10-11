@@ -22,10 +22,6 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
     forgetOne(message.url).then(reply);
     return true;
   }
-  if (message.type === "expire") {
-    expireOldReading().then(reply);
-    return true;
-  }
   if (message.type === "clear") {
     forgetEverything().then(reply);
     return true;
@@ -49,6 +45,18 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       .catch(() => reply(false));
     return true;
   }
+  if (message.type === "sync") {
+    syncCaptures().then(() => reply({ ok: true }));
+    return true;
+  }
+  if (message.type === "save-later") {
+    saveForLater(message.tab).then(reply);
+    return true;
+  }
+  if (message.type === "post") {  // the popup changes settings
+    post(message.path, message.body || {}).then(reply).catch((error) => reply({ error: String(error) }));
+    return true;
+  }
   if (message.type === "get") {  // the library reads /sources and /claims
     fetch(`${SERVER}/${message.path}`, { headers: HEADERS, cache: "no-store" })
       .then((response) => response.json())
@@ -69,10 +77,9 @@ async function post(route, body) {
 
 // Sends a page to the backend and records what happened, for the popup's saved pages list.
 async function capture({ url, title, html }) {
-  const { project = "" } = await chrome.storage.local.get("project");
-  let entry = { url, title: title || url, at: Date.now(), project: project || null };
+  let entry = { url, title: title || url, at: Date.now() };
   try {
-    const result = await post("capture", { url, html, project });
+    const result = await post("capture", { url, html });
     if (result.ok && result.already_captured) entry.status = "already";
     else if (result.ok) entry = { ...entry, status: "saved", passages: result.passages };
     else entry = { ...entry, status: "skipped", reason: result.reason };
@@ -139,13 +146,12 @@ chrome.tabs.onUpdated.addListener((tabId, change, tab) => {
   if (change.status === "complete" || change.url) watchPdf(tab);
 });
 
-async function captureVideo(url, title) {
-  if (!(await capturing())) return;
+async function captureVideo(url, title, force = false) {
+  if (!force && !(await capturing())) return;
   pdfsSent.add(url);
-  const { project = "" } = await chrome.storage.local.get("project");
-  let entry = { url, title: (title || url).replace(/ - YouTube$/, ""), at: Date.now(), project: project || null };
+  let entry = { url, title: (title || url).replace(/ - YouTube$/, ""), at: Date.now() };
   try {
-    const result = await post("capture-video", { url, project });
+    const result = await post("capture-video", { url });
     if (result.ok && result.already_captured) entry.status = "already";
     else if (result.ok) entry = { ...entry, status: "saved", passages: result.passages };
     else entry = { ...entry, status: "skipped", reason: result.reason };
@@ -154,6 +160,7 @@ async function captureVideo(url, title) {
   }
   console.log("[Referee] video capture:", entry);
   await logCapture(entry);
+  return entry;
 }
 chrome.tabs.onActivated.addListener(({ tabId }) => {
   chrome.tabs.get(tabId).then(watchPdf).catch(() => {});
@@ -172,18 +179,17 @@ function toBase64(buffer) {
 
 // Downloads the PDF the person is reading (with their own login, so journal papers they
 // can open are included) and sends it to the backend.
-async function capturePdf(url, title) {
-  if (!(await capturing())) return;
+async function capturePdf(url, title, force = false) {
+  if (!force && !(await capturing())) return;
   pdfsSent.add(url);
-  const { project = "" } = await chrome.storage.local.get("project");
-  let entry = { url, title: title || url, at: Date.now(), project: project || null };
+  let entry = { url, title: title || url, at: Date.now() };
   try {
     const response = await fetch(url, { credentials: "include" });
     const type = response.headers.get("content-type") || "";
     if (!url.startsWith("file:") && !type.includes("pdf")) throw new Error("not a PDF");
     const data = await response.arrayBuffer();
     if (data.byteLength > MAX_PDF_BYTES) throw new Error("PDF is larger than 25 MB");
-    const result = await post("capture-pdf", { url, title: title || "", project, data: toBase64(data) });
+    const result = await post("capture-pdf", { url, title: title || "", data: toBase64(data) });
     if (result.ok && result.already_captured) entry.status = "already";
     else if (result.ok) entry = { ...entry, status: "saved", passages: result.passages };
     else entry = { ...entry, status: "skipped", reason: result.reason };
@@ -193,6 +199,7 @@ async function capturePdf(url, title) {
   }
   console.log("[Referee] PDF capture:", entry);
   await logCapture(entry);
+  return entry;
 }
 
 // Forget one page or PDF, on the server and in the saved pages list.
@@ -209,19 +216,33 @@ async function forgetOne(url) {
 }
 
 // Reading older than the chosen number of days is forgotten automatically (checked daily).
-async function expireOldReading() {
-  const { expiryDays = "0", captures = [] } = await chrome.storage.local.get(["expiryDays", "captures"]);
-  const days = Number(expiryDays);
-  if (!days) return { ok: true, forgotten: 0 };
-  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-  const old = captures.filter((c) => c.at < cutoff);
-  for (const c of old) await forgetOne(c.url);
-  return { ok: true, forgotten: old.length };
-}
 
-chrome.alarms.create("expire-reading", { periodInMinutes: 24 * 60 });
 
 // Forget everything captured, on the server and in the saved pages list.
+// "Save for later": keep the page in the current project permanently, capturing it first if
+// it wasn't captured (e.g. outside a Focus or writing session).
+async function saveForLater(tab) {
+  if (!tab?.url || isSkipped(tab.url)) return { ok: false, reason: "Referee never saves this kind of page." };
+  try {
+    const stored = await fetch(`${SERVER}/sources`, { headers: HEADERS }).then((r) => r.json());
+    if (!stored.some((s) => s.url === tab.url)) {
+      let entry;
+      if (YOUTUBE_VIDEO.test(tab.url)) entry = await captureVideo(tab.url, tab.title, true);
+      else if (PDF_URL.test(tab.url)) entry = await capturePdf(tab.url, tab.title, true);
+      else {
+        const page = await chrome.tabs.sendMessage(tab.id, { type: "capture-now" }).catch(() => null);
+        if (!page) return { ok: false, reason: "Reload the page and try again." };
+        if (page.error) return { ok: false, reason: page.error };
+        entry = await capture(page);
+      }
+      if (entry.status !== "saved" && entry.status !== "already") return { ok: false, reason: entry.reason || "Couldn't read this page." };
+    }
+    return await post("sources/keep", { url: tab.url });
+  } catch {
+    return { ok: false, reason: "The Referee server isn't running." };
+  }
+}
+
 async function forgetEverything() {
   try {
     await post("clear", {});
@@ -242,8 +263,10 @@ async function setResearch(on, minutes) {
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "research-off") setResearch(false);
-  if (alarm.name === "expire-reading") expireOldReading();
-  if (alarm.name === "focus-check") checkFocus();
+  if (alarm.name === "focus-check") {
+    checkFocus();
+    syncCaptures();
+  }
 });
 
 // A macOS Focus can switch research mode on through the server; check every minute so the
@@ -259,6 +282,22 @@ async function checkFocus() {
 
 chrome.alarms.create("focus-check", { periodInMinutes: 1 });
 
+// Temporary reading expires on the server. Drop expired or forgotten pages from the capture
+// log too, so an open tab showing one of them can capture it again.
+async function syncCaptures() {
+  let stored;
+  try {
+    stored = await fetch(`${SERVER}/sources`, { headers: HEADERS }).then((r) => r.json());
+  } catch {
+    return;  // server not running: leave the log alone
+  }
+  if (!Array.isArray(stored)) return;
+  const urls = new Set(stored.map((s) => s.url));
+  const { captures = [] } = await chrome.storage.local.get("captures");
+  const kept = captures.filter((c) => urls.has(c.url) || (c.status !== "saved" && c.status !== "already"));
+  if (kept.length !== captures.length) await chrome.storage.local.set({ captures: kept });
+}
+
 // While research mode is on (by hand or by a Focus), the badge shows how many pages have been saved.
 async function updateBadge() {
   const { research: manual, focus, captures = [] } = await chrome.storage.local.get(["research", "focus", "captures"]);
@@ -272,5 +311,4 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && (changes.research || changes.focus || changes.captures)) updateBadge();
 });
 chrome.runtime.onStartup.addListener(updateBadge);
-chrome.runtime.onStartup.addListener(expireOldReading);
 chrome.runtime.onInstalled.addListener(updateBadge);

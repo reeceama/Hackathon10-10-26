@@ -1,3 +1,4 @@
+import threading
 import time
 from datetime import date
 from pathlib import Path
@@ -13,7 +14,8 @@ import base64
 from extract import extract_page
 from pdf import extract_pdf
 from video import extract_video
-from store import add_page, clear, forget, search, sources
+from store import add_page, clear, expired, forget, keep, move, rename_project, search, sources
+from reading import ReadingSettings
 from verify import verify
 from claims import needs_source
 from feedback import FeedbackModel
@@ -26,6 +28,19 @@ CLOSEST_SCORE = 0.3  # loosely related reading worth suggesting for an unsupport
 
 feedback = FeedbackModel(Path(__file__).with_name("feedback.json"))
 claim_log = ClaimLog(Path(__file__).with_name("claims.json"))
+reading = ReadingSettings(Path(__file__).with_name("reading.json"))
+
+
+def forget_expired_reading():
+    # Temporary reading (not saved for later, not cited) is forgotten after keep_minutes.
+    while True:
+        for url in expired(time.time() - reading.keep_minutes * 60):
+            claim_log.forget(url)
+            forget(url)
+        time.sleep(60)
+
+
+threading.Thread(target=forget_expired_reading, daemon=True).start()
 
 
 class WritingSession:
@@ -131,6 +146,28 @@ class FocusRequest(BaseModel):
     on: bool
 
 
+class KeepRequest(BaseModel):
+    url: str
+    project: str = ""
+
+
+class SettingsRequest(BaseModel):
+    project: str | None = None
+    projects: list[str] | None = None
+    keep_minutes: int | None = None
+    links: dict[str, list[str]] | None = None
+
+
+class RenameRequest(BaseModel):
+    old: str
+    new: str = ""  # empty: delete the project (its sources are kept, with no project)
+
+
+class MoveRequest(BaseModel):
+    url: str
+    project: str = ""
+
+
 class CaptureUrlRequest(BaseModel):
     url: str
 
@@ -149,14 +186,20 @@ def health():
     return {"status": "Referee server running"}
  
  
+def stamp(metadata, project):
+    metadata["captured_at"] = date.today().isoformat()  # APA access date
+    metadata["captured_ts"] = time.time()                # for expiring temporary reading
+    metadata["project"] = project or reading.project or None
+    metadata["kept"] = False                             # temporary until saved or cited
+
+
 @app.post("/capture")
 def capture(req: CaptureRequest):
     try:
         _, metadata, passages = extract_page(req.html, url=req.url)
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
-    metadata["captured_at"] = date.today().isoformat()  # APA access date
-    metadata["project"] = req.project or None
+    stamp(metadata, req.project)
     added = add_page(metadata, passages)
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
@@ -171,8 +214,7 @@ def capture_pdf(req: CapturePdfRequest):
         return {"ok": False, "reason": str(e)}
     if req.title and not metadata.get("title"):
         metadata["title"] = req.title
-    metadata["captured_at"] = date.today().isoformat()  # APA access date
-    metadata["project"] = req.project or None
+    stamp(metadata, req.project)
     added = add_page(metadata, [text for text, _ in passages], pages=[page for _, page in passages])
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
@@ -185,8 +227,7 @@ def capture_video(req: CaptureVideoRequest):
         metadata, passages = extract_video(req.url)
     except ValueError as e:
         return {"ok": False, "reason": str(e)}
-    metadata["captured_at"] = date.today().isoformat()  # APA access date
-    metadata["project"] = req.project or None
+    stamp(metadata, req.project)
     added = add_page(metadata, [text for text, _ in passages], times=[time for _, time in passages])
     if added == 0:
         return {"ok": True, "passages": 0, "already_captured": True}
@@ -210,7 +251,8 @@ def check(req: CheckRequest):
     if len(sentence.split()) < 5:          # too short to carry a real claim
         return {"match": False}
  
-    results = search(sentence, k=5, project=req.project or None)  # 3 missed the best passage in testing
+    project = req.project or reading.project or None
+    results = search(sentence, k=5, projects=reading.allowed(project))  # 3 missed the best passage in testing
 
     # No supporting reading: say whether the sentence reads like a claim that needs one, and
     # which sources already read come closest, as places to look. Nothing is written for them.
@@ -224,7 +266,9 @@ def check(req: CheckRequest):
         return unsupported
     if not feedback.should_show(verdict):  # this person keeps rejecting markers like this
         return {"match": False}
-    claim_log.record(sentence, verdict, req.project or None)  # for the library and proof of work
+    claim_log.record(sentence, verdict, project)  # for the library and proof of work
+    if verdict.get("label") == "supports" and verdict.get("source", {}).get("url"):
+        keep(verdict["source"]["url"])  # cited sources are kept automatically
     # verdict includes "label": "supports" or "contradicts" - Word and Obsidian handle both
     return {"match": True, **verdict}
  
@@ -278,6 +322,45 @@ def list_sources():
 def forget_source(url: str):
     claim_log.forget(url)
     return {"ok": True, "removed": forget(url)}
+
+
+@app.post("/sources/forget-temporary")
+def forget_temporary():
+    # Everything not saved for later or cited, now rather than when it expires.
+    urls = expired(time.time() + 1)
+    for url in urls:
+        claim_log.forget(url)
+        forget(url)
+    return {"ok": True, "forgotten": len(urls)}
+
+
+@app.post("/sources/keep")
+def keep_source(req: KeepRequest):
+    # "Save for later": kept permanently, in the given or current project.
+    return {"ok": keep(req.url, req.project or reading.project or None)}
+
+
+@app.post("/sources/move")
+def move_source(req: MoveRequest):
+    return {"ok": move(req.url, req.project or None)}
+
+
+@app.post("/projects/rename")
+def rename_project_route(req: RenameRequest):
+    new = req.new.strip()
+    rename_project(req.old, new or None)
+    claim_log.rename_project(req.old, new or None)
+    return reading.rename(req.old, new)
+
+
+@app.get("/settings")
+def get_settings():
+    return reading.as_dict()
+
+
+@app.post("/settings")
+def set_settings(req: SettingsRequest):
+    return reading.update(req.model_dump(exclude_none=True))
 
 
 @app.get("/claims")

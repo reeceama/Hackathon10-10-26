@@ -16,6 +16,7 @@
       #status.off { color: #888; }
       button { width: 100%; padding: 8px; border: 0; border-radius: 6px; background: #111; color: white; font-size: 13px; cursor: pointer; }
       button.quiet { margin-top: 6px; background: none; color: #888; font-size: 12px; text-decoration: underline; }
+      button.quiet[data-armed="yes"] { color: #c0392b; }
       .switch { position: relative; width: 38px; height: 22px; }
       .switch input { display: none; }
       .slider { position: absolute; inset: 0; background: #ccc; border-radius: 22px; cursor: pointer; transition: 0.2s; }
@@ -29,11 +30,23 @@
       #saved-list .s { color: #888; font-size: 11px; }
       #saved-list .s[data-status="saved"] { color: #2b7a4b; }
       #saved-list .s[data-status="offline"], #saved-list .s[data-status="skipped"] { color: #c0392b; }
-      #project { width: 120px; font-size: 13px; padding: 2px 6px; border: 1px solid #ccc; border-radius: 4px; }
+      #project { max-width: 150px; font-size: 13px; }
+      #save-later { margin: 0 0 4px; }
+      .new-project { gap: 6px; }
+      .new-project[hidden] { display: none; }  /* .row's flex would otherwise override hidden */
+      .new-project input { flex: 1; font-size: 13px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; }
+      .new-project button { width: auto; padding: 5px 10px; }
+      #save-result { margin: 2px 0 10px; min-height: 0; }
+      .tag.temp { background: #fff4e0; color: #8a5600; }
       #search { width: 100%; box-sizing: border-box; font-size: 12px; padding: 5px 8px; border: 1px solid #ddd; border-radius: 6px; margin-bottom: 6px; }
-      #saved-list li { position: relative; padding-right: 18px; }
-      #saved-list .forget-one { position: absolute; right: 0; top: 6px; width: auto; padding: 0 2px; background: none; color: #aaa; font-size: 14px; }
+      #saved-list li { position: relative; padding-right: 76px; }
+      /* Save and forget sit well apart, with large targets, so one isn't pressed for the other. */
+      #saved-list .actions { position: absolute; right: 0; top: 4px; display: flex; gap: 18px; }
+      #saved-list .actions button { width: 26px; height: 26px; padding: 0; border-radius: 6px; background: none; display: flex; align-items: center; justify-content: center; }
+      #saved-list .keep-one, #saved-list .forget-one { color: #aaa; border: 0; font-variant-emoji: text; }
+      #saved-list .keep-one:hover { color: #2b7a4b; }
       #saved-list .forget-one:hover { color: #c0392b; }
+      #saved-list .forget-one[data-armed="yes"] { color: #fff; background: #c0392b; }
       .tags { display: flex; gap: 4px; margin-top: 2px; flex-wrap: wrap; }
       .tag { font-size: 10px; padding: 0 5px; border-radius: 3px; background: #f0f0f0; color: #555; }
       .tag.cited { background: #e7f3ec; color: #2b7a4b; }
@@ -45,14 +58,17 @@
         .server[data-state="online"], #saved-list .s[data-status="saved"] { color: #5cc58a; }
         .server[data-state="offline"], #saved-list .s[data-status="offline"], #saved-list .s[data-status="skipped"] { color: #f07167; }
         #status { color: #e6e6e6; }
-        select, #project, #search { background: #2c2c2e; color: #e6e6e6; border: 1px solid #3a3a3c; border-radius: 4px; }
+        select, #project, #search, .new-project input { background: #2c2c2e; color: #e6e6e6; border: 1px solid #3a3a3c; border-radius: 4px; }
         button { background: #e6e6e6; color: #111; }
         button.quiet, #saved-list .forget-one { background: none; color: #9a9a9f; }
+        #saved-list .keep-one { color: #9a9a9f; background: none; }
+        #saved-list .keep-one:hover { color: #5cc58a; }
         .slider { background: #48484a; }
         input:checked + .slider { background: #5cc58a; }
         #saved-list li { border-bottom-color: #3a3a3c; }
         .tag { background: #2c2c2e; color: #b0b0b5; }
         .tag.cited { background: rgba(92, 197, 138, 0.15); color: #5cc58a; }
+        .tag.temp { background: rgba(240, 180, 80, 0.15); color: #f0b450; }
       }
     </style>
   </head>
@@ -84,28 +100,32 @@
     </div>
     <div class="row">
       <span>Project</span>
-      <input id="project" list="projects" placeholder="Any" />
-      <datalist id="projects"></datalist>
+      <select id="project"></select>
+    </div>
+    <div class="row new-project" id="new-project" hidden>
+      <input id="new-project-name" placeholder="Project name" maxlength="60" />
+      <button id="new-project-create">Create</button>
     </div>
     <div class="row">
-      <span>Forget reading after</span>
-      <select id="expiry">
-        <option value="0">Never</option>
-        <option value="7">7 days</option>
-        <option value="14">14 days</option>
-        <option value="30">30 days</option>
+      <span>Keep unsaved reading for</span>
+      <select id="keep">
+        <option value="15">15 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="1440">1 day</option>
       </select>
     </div>
-    <p class="hint" id="mode-hint">Captures what you read only while you're writing in Word or Obsidian.</p>
+    <p class="hint" id="mode-hint">Captures what you read only during a Focus or while you're writing. Reading you don't save or cite is forgotten after the time above.</p>
     <div id="status"></div>
+    <button id="save-later">Save this page for later</button>
+    <p class="hint" id="save-result"></p>
 
-    <h2 id="saved-title">Saved pages</h2>
+    <h2 id="saved-title">Your reading</h2>
     <input id="search" type="search" placeholder="Search your reading" />
     <ol id="saved-list"></ol>
-    <p class="empty" id="saved-empty">Pages you spend time on, or highlight text in, while research mode is on are saved here.</p>
+    <p class="empty" id="saved-empty">Pages you read during a Focus or while writing appear here. Save the ones you'll use.</p>
 
     <button id="open-library">Open library</button>
-    <button class="quiet" id="forget">Forget saved pages</button>
+    <button class="quiet" id="forget">Forget temporary pages</button>
     <script src="popup.js"></script>
   </body>
 </html>

@@ -49,10 +49,11 @@ def add_page(metadata: Dict, passages: List[str], pages: Optional[List[int]] = N
     return len(passages)
 
 
-def search(sentence: str, k: int = 3, project: Optional[str] = None) -> List[Dict]:
+def search(sentence: str, k: int = 3, projects: Optional[set] = None) -> List[Dict]:
     """Return the k stored passages that best match the sentence.
 
-    project: only use reading captured for that project (plus reading with no project).
+    projects: only use sources in these projects (None: every source). Projects are kept
+    apart, so a piece of writing is only checked against the reading meant for it.
 
     Combines meaning (embeddings) with keywords (BM25) by reciprocal rank fusion, so a
     passage ranked well by either method is put forward. "score" stays the cosine
@@ -62,8 +63,8 @@ def search(sentence: str, k: int = 3, project: Optional[str] = None) -> List[Dic
         return []
     query = embed([sentence])[0]
     cosine = _vectors @ query
-    if project:
-        outside = [i for i, p in enumerate(_passages) if p["source"].get("project") not in (None, "", project)]
+    if projects is not None:
+        outside = [i for i, p in enumerate(_passages) if p["source"].get("project") not in projects]
         cosine[outside] = -np.inf
     by_meaning = [i for i in np.argsort(cosine)[::-1][:CANDIDATES] if np.isfinite(cosine[i])]
     keyword_scores = {i: v for i, v in _keywords.scores(sentence).items() if np.isfinite(cosine[i])}
@@ -85,6 +86,60 @@ def sources() -> List[Dict]:
         entry = found.setdefault(url, {**p["source"], "passages": 0})
         entry["passages"] += 1
     return list(found.values())
+
+
+def keep(url: str, project: Optional[str] = None) -> bool:
+    """Mark a source as kept (saved for later, or cited), optionally moving it to a project.
+
+    Kept sources never expire. Returns False if the source isn't stored.
+    """
+    found = False
+    with _lock:
+        for p in _passages:
+            if p["source"].get("url") == url:
+                p["source"]["kept"] = True
+                if project:
+                    p["source"]["project"] = project
+                found = True
+        if found:
+            _save()
+    return found
+
+
+def move(url: str, project: Optional[str]) -> bool:
+    """Put a source in a project (None: no project), without changing whether it is kept."""
+    found = False
+    with _lock:
+        for p in _passages:
+            if p["source"].get("url") == url:
+                p["source"]["project"] = project or None
+                found = True
+        if found:
+            _save()
+    return found
+
+
+def rename_project(old: str, new: Optional[str]) -> None:
+    """Move every source in one project to another (None: no project)."""
+    with _lock:
+        for p in _passages:
+            if p["source"].get("project") == old:
+                p["source"]["project"] = new or None
+        _save()
+
+
+def expired(older_than: float) -> List[str]:
+    """URLs of temporary sources captured before the given time (seconds since the epoch).
+
+    Sources without a capture time predate temporary reading and are treated as kept.
+    """
+    urls = set()
+    for p in _passages:
+        source = p["source"]
+        captured = source.get("captured_ts")
+        if source.get("kept") is False and captured is not None and captured < older_than:
+            urls.add(source.get("url"))
+    return sorted(urls)
 
 
 def forget(url: str) -> int:

@@ -54,6 +54,13 @@ class ClaimLog:
         found = [e for e in self.entries.values() if project is None or e["project"] in (project, None)]
         return sorted(found, key=lambda e: e["at"])
 
+    def rename_project(self, old: str, new: Optional[str]) -> None:
+
+        for entry in self.entries.values():
+            if entry.get("project") == old:
+                entry["project"] = new or None
+        self.save()
+
     def forget(self, url: str) -> None:
 
         self.entries = {s: e for s, e in self.entries.items() if (e.get("source") or {}).get("url") != url}

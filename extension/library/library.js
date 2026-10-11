@@ -34,9 +34,35 @@ function style() {
   return Cite.STYLES[styleSelect.value] || Cite.STYLES.apa;
 }
 
-// Reading tagged with no project counts towards every project, as it does when checking.
+let settings = { project: "", projects: [], links: {} };
+const NO_PROJECT = "__none__";
+
+// Projects are kept apart: a project shows only its own sources ("All reading" shows everything).
 function inProject(project) {
-  return !projectSelect.value || project == null || project === projectSelect.value;
+  if (!projectSelect.value) return true;
+  if (projectSelect.value === NO_PROJECT) return !project;
+  return project === projectSelect.value;
+}
+
+// The projects this one may also cite from, chosen with the checkboxes under the controls.
+function renderLinks() {
+  const box = document.getElementById("links");
+  const project = projectSelect.value;
+  const others = settings.projects.filter((p) => p !== project);
+  if (!project || project === NO_PROJECT || !others.length) {
+    box.hidden = true;
+    return;
+  }
+  const linked = new Set(settings.links?.[project] || []);
+  box.hidden = false;
+  box.innerHTML = `<span>${escapeHtml(project)} can also cite references from:</span>` + others.map((p) =>
+    `<label><input type="checkbox" value="${escapeHtml(p)}" ${linked.has(p) ? "checked" : ""}/> ${escapeHtml(p)}</label>`).join("");
+  box.querySelectorAll("input").forEach((input) => input.addEventListener("change", async () => {
+    const chosen = [...box.querySelectorAll("input:checked")].map((i) => i.value);
+    const saved = await chrome.runtime.sendMessage({ type: "post", path: "settings", body: { links: { ...settings.links, [project]: chosen } } });
+    if (saved && !saved.error) settings = saved;
+    toast("Saved");
+  }));
 }
 
 function supported() {
@@ -91,12 +117,36 @@ function renderSources() {
         <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(Cite.cleanTitle(s))}</a>
         <div class="meta">
           <span class="tag">${type}</span>${s.project ? `<span class="tag">${escapeHtml(s.project)}</span>` : ""}
+          <span class="tag ${s.kept === false ? "temp" : "cited"}">${s.kept === false ? "Temporary" : "Saved"}</span>
           <span class="tag ${n ? "cited" : ""}">${n ? `Backs ${n} claim${n === 1 ? "" : "s"}` : "Not cited yet"}</span>
           ${escapeHtml([s.site, read].filter(Boolean).join(" · "))}
         </div>
       </div>
+      <select class="move" aria-label="Project for this source">
+        <option value="">No project</option>
+        ${settings.projects.map((p) => `<option value="${escapeHtml(p)}" ${s.project === p ? "selected" : ""}>${escapeHtml(p)}</option>`).join("")}
+      </select>
+      ${s.kept === false ? `<button class="keep">Save</button>` : ""}
       <button class="forget" title="Forget this source">×</button>`;
-    item.querySelector(".forget").onclick = async () => {
+    item.querySelector(".move").addEventListener("change", async (event) => {
+      await chrome.runtime.sendMessage({ type: "post", path: "sources/move", body: { url: s.url, project: event.target.value } });
+      toast(event.target.value ? `Moved to ${event.target.value}` : "Removed from its project");
+      load();
+    });
+    item.querySelector(".keep")?.addEventListener("click", async () => {
+      await chrome.runtime.sendMessage({ type: "post", path: "sources/keep", body: { url: s.url, project: s.project || "" } });
+      toast("Saved");
+      load();
+    });
+    item.querySelector(".forget").onclick = async (event) => {
+      // Saved sources take two clicks (the first turns the cross red); temporary ones take one.
+      const button = event.currentTarget;
+      if (s.kept !== false && button.dataset.armed !== "yes") {
+        button.dataset.armed = "yes";
+        button.title = "Click again to forget";
+        setTimeout(() => { button.dataset.armed = ""; button.title = "Forget this source"; }, 3000);
+        return;
+      }
       await chrome.runtime.sendMessage({ type: "forget", url: s.url });
       toast("Forgotten");
       load();
@@ -130,7 +180,75 @@ function renderSummary() {
       ? `<span class="note">${top} of them rest on one source (${escapeHtml(Cite.cleanTitle(topSource))}). Consider backing some with others.</span>` : "");
 }
 
+// Create, rename, delete. Renaming and deleting are done in place: prompt() and confirm()
+// aren't relied on, so this works the same in every browser.
+function renderProjects() {
+  const list = document.getElementById("projects");
+  const counts = new Map();
+  for (const s of sources) if (s.project) counts.set(s.project, (counts.get(s.project) || 0) + 1);
+  list.replaceChildren(...settings.projects.map((name) => {
+    const item = document.createElement("li");
+    const n = counts.get(name) || 0;
+    item.innerHTML = `<span class="name">${escapeHtml(name)}</span>
+      ${settings.project === name ? `<span class="current">Current</span>` : `<button class="use">Make current</button>`}
+      <span class="hint">${n} source${n === 1 ? "" : "s"}</span>
+      <button class="rename">Rename</button><button class="delete">Delete</button>`;
+    item.querySelector(".use")?.addEventListener("click", () => saveSettings({ project: name }));
+    item.querySelector(".rename").addEventListener("click", () => {
+      item.innerHTML = `<input class="rename-to" value="${escapeHtml(name)}" maxlength="60" /><button class="ok">Rename</button><button class="cancel">Cancel</button>`;
+      const input = item.querySelector(".rename-to");
+      input.focus();
+      const done = async () => {
+        const to = input.value.trim();
+        if (to && to !== name) await renameProject(name, to);
+        else renderProjects();
+      };
+      item.querySelector(".ok").onclick = done;
+      item.querySelector(".cancel").onclick = renderProjects;
+      input.onkeydown = (event) => { if (event.key === "Enter") done(); if (event.key === "Escape") renderProjects(); };
+    });
+    const remove = item.querySelector(".delete");
+    remove.addEventListener("click", async () => {
+      if (remove.dataset.armed !== "yes") {
+        remove.dataset.armed = "yes";
+        remove.textContent = "Click again: sources stay, with no project";
+        setTimeout(() => { remove.dataset.armed = ""; remove.textContent = "Delete"; }, 4000);
+        return;
+      }
+      await renameProject(name, "");
+    });
+    return item;
+  }));
+  if (!settings.projects.length) list.innerHTML = `<li class="hint">No projects yet.</li>`;
+}
+
+async function saveSettings(changes) {
+  const saved = await chrome.runtime.sendMessage({ type: "post", path: "settings", body: changes });
+  if (saved && !saved.error) settings = saved;
+  load();
+}
+
+async function renameProject(old, name) {
+  await chrome.runtime.sendMessage({ type: "post", path: "projects/rename", body: { old, new: name } });
+  toast(name ? `Renamed to ${name}` : "Project deleted");
+  if (projectSelect.value === old) projectSelect.value = name;
+  load();
+}
+
+async function createProject() {
+  const input = document.getElementById("new-project-name");
+  const name = input.value.trim();
+  if (!name) return input.focus();
+  input.value = "";
+  await saveSettings({ project: name });
+  toast(`Created ${name}: it's now the current project`);
+}
+document.getElementById("new-project-create").onclick = createProject;
+document.getElementById("new-project-name").onkeydown = (event) => { if (event.key === "Enter") createProject(); };
+
 function render() {
+  renderProjects();
+  renderLinks();
   renderSummary();
   renderReferences();
   renderSources();
@@ -148,7 +266,7 @@ function proofOfWork() {
   const numbers = new Map(cited.map((s, i) => [s.url, i + 1]));
   const byUrl = new Map(sources.map((s) => [s.url, s]));
   const items = supported();
-  const name = projectSelect.value || "All reading";
+  const name = projectSelect.value === NO_PROJECT ? "No project" : projectSelect.value || "All reading";
 
   const readingRows = read.map((c) => `<tr><td>${c.at ? escapeHtml(when(c.at)) : "—"}</td><td>${escapeHtml(c.title || c.url)}<br>
     <span class="url">${escapeHtml(c.url)}</span></td></tr>`).join("");
@@ -198,10 +316,14 @@ async function load() {
   claims = Array.isArray(fetchedClaims) ? fetchedClaims : [];
   captures = stored.captures || [];
 
-  const projects = [...new Set(sources.map((s) => s.project).filter(Boolean))].sort();
+  const fetched = await get("settings").catch(() => null);
+  if (fetched && !fetched.error) settings = fetched;
+  const projects = [...new Set([...(settings.projects || []), ...sources.map((s) => s.project).filter(Boolean)])].sort();
+  settings.projects = projects;
   const current = projectSelect.value;
-  projectSelect.replaceChildren(new Option("All reading", ""), ...projects.map((p) => new Option(p, p)));
-  projectSelect.value = projects.includes(current) ? current : "";
+  projectSelect.replaceChildren(new Option("All reading", ""), ...projects.map((p) => new Option(p, p)), new Option("No project", NO_PROJECT));
+  projectSelect.value = projects.includes(current) || current === NO_PROJECT ? current
+    : (current === "" && settings.project && !projectSelect.dataset.touched ? settings.project : "");
   render();
 }
 
@@ -210,8 +332,31 @@ styleSelect.onchange = () => {
   try { localStorage.setItem(STYLE_KEY, styleSelect.value); } catch { /* storage blocked */ }
   render();
 };
-projectSelect.onchange = render;
+projectSelect.onchange = () => {
+  projectSelect.dataset.touched = "yes";  // opened on the current project; now the person's choice
+  render();
+};
 searchBox.oninput = renderSources;
 document.getElementById("proof").onclick = proofOfWork;
+
+// Forgetting everything is kept off the popup and needs a typed confirmation.
+const forgetEverything = document.getElementById("forget-everything");
+forgetEverything.onclick = async () => {
+  const typed = forgetEverything.parentElement.querySelector("input");
+  if (!typed) {
+    const input = Object.assign(document.createElement("input"), { placeholder: "Type forget to confirm" });
+    input.style.marginRight = "8px";
+    forgetEverything.before(input);
+    forgetEverything.textContent = "Forget everything";
+    input.focus();
+    return;
+  }
+  if (typed.value.trim().toLowerCase() !== "forget") return typed.focus();
+  await chrome.runtime.sendMessage({ type: "clear" });
+  typed.remove();
+  forgetEverything.textContent = "Forget all reading, saved and temporary";
+  toast("All reading forgotten");
+  load();
+};
 chrome.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes.captures) load(); });
 load();

@@ -21,7 +21,18 @@
         <button id="proof">Proof of work report</button>
       </div>
 
+      <div id="links" class="links" hidden></div>
       <p id="summary" class="summary"></p>
+
+      <section>
+        <div class="section-head"><h2>Projects</h2></div>
+        <p class="hint">The current project, chosen in the popup, decides which sources your writing is checked against.</p>
+        <ul id="projects"></ul>
+        <div class="new-project">
+          <input id="new-project-name" placeholder="New project name" maxlength="60" />
+          <button id="new-project-create">Create project</button>
+        </div>
+      </section>
 
       <section>
         <div class="section-head">
@@ -46,6 +57,10 @@
         <ul id="sources"></ul>
       </section>
     </main>
+
+    <footer class="danger">
+      <button id="forget-everything">Forget all reading, saved and temporary</button>
+    </footer>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="cite.js"></script>
