@@ -2,6 +2,7 @@ import difflib
 import hashlib
 import re
 import sys
+import threading
 from collections import Counter, OrderedDict
 from typing import Literal, Optional
 
@@ -21,19 +22,22 @@ class Client:
 
         self.key = None
         self.client = None
+        self.lock = threading.Lock()  # checks run in parallel: build the client once, not half-built
 
     def get(self):
 
         key = api_key.get()
-        if key != self.key:
-            self.key = key
-            self.client = anthropic.Anthropic(api_key=key, timeout=10.0) if key else None  # never leave the writer waiting
-        return self.client
+        with self.lock:
+            if key != self.key:
+                self.client = anthropic.Anthropic(api_key=key, timeout=10.0) if key else None  # never leave the writer waiting
+                self.key = key
+            return self.client
 
 
 anthropic_client = Client()
 
 MODEL = "claude-haiku-5-5"
+THINKING = True  # ~200 extra output tokens a check, but SciFact precision at 0.7 falls from 0.96 to 0.81 without it
 THRESHOLD = 0.7  # SciFact, current prompt: precision 0.96 (95% CI 0.87-0.99), recall 0.70; 0.6 gave 0.93 and 0.76
 # Calibrated in eval_wording.py (margin 0.32 between copying and own words on 21 sentences):
 NGRAM = 3  # length of the word runs compared when checking for copying
@@ -122,10 +126,11 @@ def call_llm(system, user, use_cache=True):
         return None
     response = client.messages.parse(
         model=MODEL,
-        max_tokens=1500,  # the model thinks before answering; replies used up to ~700 tokens in testing
+        max_tokens=1500,  # with thinking on, replies used up to ~700 tokens in testing
         system=system,
         messages=[{"role": "user", "content": user}],
         output_format=Verdict,
+        **({} if THINKING else {"thinking": {"type": "disabled"}}),
     )
     if response.parsed_output is not None:
         cache.put(key, response.parsed_output)
