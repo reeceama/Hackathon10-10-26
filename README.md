@@ -207,6 +207,10 @@ python eval_scifact.py analyse
 python eval_wording.py
 ```
 
+To have the server and the Word add-in's HTTPS server start whenever you log in, and restart if they stop, run `sh scripts/install-server.sh` once (macOS).
+
+To switch research mode on with a macOS Focus, create two automations in the Shortcuts app: when the Focus turns on, run the shell script `curl -s -X POST localhost:8000/focus -H 'Content-Type: application/json' -d '{"on":true}'`, and when it turns off, the same with `false`.
+
 To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. Open the editor from the popup and start writing, then read some sources; anything you read while writing is captured. For Obsidian, copy `obsidian-plugin/` into your vault as `.obsidian/plugins/referee/` and enable it under Community plugins. API docs are at http://localhost:8000/docs while the backend is running.
 
 ## 8. API

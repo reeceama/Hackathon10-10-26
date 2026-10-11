@@ -49,6 +49,21 @@ class WritingSession:
 
 
 writing = WritingSession()
+
+
+class FocusMode:
+
+    """
+    Research mode switched on from outside the browser, e.g. by a macOS Focus through a
+    Shortcuts automation. While it is on, the extension captures reading.
+    """
+
+    def __init__(self):
+
+        self.on = False
+
+
+focus = FocusMode()
  
 app = FastAPI()
 
@@ -99,6 +114,10 @@ class CapturePdfRequest(BaseModel):
 class CaptureVideoRequest(BaseModel):
     url: str
     project: str = ""
+
+
+class FocusRequest(BaseModel):
+    on: bool
 
 
 class CaptureUrlRequest(BaseModel):
@@ -222,7 +241,13 @@ def writing_ping():
 
 @app.get("/writing")
 def writing_status():
-    return {"active": writing.active()}
+    return {"active": writing.active(), "focus": focus.on}
+
+
+@app.post("/focus")
+def set_focus(req: FocusRequest):
+    focus.on = req.on
+    return {"ok": True, "focus": focus.on}
 
 
 @app.get("/sources")

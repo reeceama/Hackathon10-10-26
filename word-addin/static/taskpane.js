@@ -432,7 +432,7 @@ function sourceXml(source) {
     who = `<b:NameList>${people.map((n) =>
       `<b:Person><b:Last>${xml(n.last)}</b:Last><b:First>${xml(n.first)}</b:First></b:Person>`).join("")}</b:NameList>`;
   }
-  return `<b:Source><b:Tag>${sourceTag(source)}</b:Tag><b:SourceType>InternetSite</b:SourceType>` +
+  return `<b:Source><b:Tag>${sourceTag(source)}</b:Tag><b:SourceType>${source.type === "pdf" ? "DocumentFromInternetSite" : "InternetSite"}</b:SourceType>` +
     `<b:Guid>{${crypto.randomUUID().toUpperCase()}}</b:Guid><b:Title>${xml(cleanTitle(source.title))}</b:Title>` +
     (published.year ? `<b:Year>${published.year}</b:Year>` : "") +
     (published.month ? `<b:Month>${published.month}</b:Month>` : "") +

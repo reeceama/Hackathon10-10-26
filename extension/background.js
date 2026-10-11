@@ -96,14 +96,14 @@ const PDF_URL = /\.pdf($|[?#])/i;
 const pdfTimers = new Map(); // tab id -> timer
 const pdfsSent = new Set();  // URLs already sent this session
 
-// Research mode on, or (automatic mode only) the Word add-in reports someone writing.
+// Research mode on, a macOS Focus has switched it on through the server, or (automatic
+// mode only) Word, Obsidian or the editor reports someone writing.
 async function capturing() {
   const { research, mode } = await chrome.storage.local.get(["research", "mode"]);
   if (research) return true;
-  if ((mode ?? "auto") !== "auto") return false;
   try {
     const result = await fetch(`${SERVER}/writing`, { headers: HEADERS }).then((r) => r.json());
-    return Boolean(result.active);
+    return Boolean(result.focus) || ((mode ?? "auto") === "auto" && Boolean(result.active));
   } catch {
     return false;
   }
@@ -236,18 +236,33 @@ async function setResearch(on, minutes) {
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === "research-off") setResearch(false);
   if (alarm.name === "expire-reading") expireOldReading();
+  if (alarm.name === "focus-check") checkFocus();
 });
 
-// While research mode is on, the badge shows how many pages have been saved.
+// A macOS Focus can switch research mode on through the server; check every minute so the
+// badge shows it.
+async function checkFocus() {
+  let focus = false;
+  try {
+    focus = Boolean((await fetch(`${SERVER}/writing`, { headers: HEADERS }).then((r) => r.json())).focus);
+  } catch { /* server not running */ }
+  const { focus: before } = await chrome.storage.local.get("focus");
+  if (focus !== Boolean(before)) await chrome.storage.local.set({ focus });
+}
+
+chrome.alarms.create("focus-check", { periodInMinutes: 1 });
+
+// While research mode is on (by hand or by a Focus), the badge shows how many pages have been saved.
 async function updateBadge() {
-  const { research, captures = [] } = await chrome.storage.local.get(["research", "captures"]);
+  const { research: manual, focus, captures = [] } = await chrome.storage.local.get(["research", "focus", "captures"]);
+  const research = manual || focus;
   const saved = captures.filter((c) => c.status === "saved").length;
   await chrome.action.setBadgeBackgroundColor({ color: "#111111" });
   await chrome.action.setBadgeText({ text: research ? String(saved || "ON") : "" });
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === "local" && (changes.research || changes.captures)) updateBadge();
+  if (area === "local" && (changes.research || changes.focus || changes.captures)) updateBadge();
 });
 chrome.runtime.onStartup.addListener(updateBadge);
 chrome.runtime.onStartup.addListener(expireOldReading);
