@@ -37,9 +37,12 @@ class WritingSession:
 
     ACTIVE_FOR = 5 * 60  # seconds after the last ping
 
+    HELPER_FOR = 2 * 60  # the Word helper sends a heartbeat every 30 seconds while Word is open
+
     def __init__(self):
 
         self.last_ping = 0.0
+        self.last_helper = 0.0
 
     def ping(self):
 
@@ -48,6 +51,10 @@ class WritingSession:
     def active(self):
 
         return time.time() - self.last_ping < self.ACTIVE_FOR
+
+    def helper_running(self):
+
+        return time.time() - self.last_helper < self.HELPER_FOR
 
 
 writing = WritingSession()
@@ -246,7 +253,14 @@ def writing_ping():
 
 @app.get("/writing")
 def writing_status():
-    return {"active": writing.active(), "focus": focus.on}
+    return {"active": writing.active(), "focus": focus.on, "helper": writing.helper_running()}
+
+
+@app.post("/helper")
+def helper_heartbeat():
+    # The background Word helper is running, so the Word add-in leaves documents to it.
+    writing.last_helper = time.time()
+    return {"ok": True}
 
 
 @app.post("/focus")

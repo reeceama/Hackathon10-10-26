@@ -140,7 +140,7 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 - **The extra checks are rules of thumb.** Whether a sentence needs a source, and what counts as an old source or over-reliance, are simple rules, not evaluated models.
 - **Author metadata is unreliable.** Many pages don't publish a usable author, so the organisation is used instead.
 - **Learning starts from very little.** With only a handful of events the model is easily swayed, which is why it falls back to the evaluated threshold until it has seen both outcomes. Referee doesn't report "ignored" markers: with an invisible tool, leaving a correct marker alone is the normal case, so it isn't evidence the marker was unhelpful.
-- **Google Docs only checks while its sidebar is open,** because Docs doesn't run add-ons in the background. The server accepts requests from any Apps Script sidebar, which is how Google serves them, so another add-on you open could in principle reach it; it still can't see anything but the passages it asks about.
+- **Google Docs only checks while its sidebar is open,** because Docs doesn't run add-ons in the background. The server accepts requests from any Apps Script sidebar, which is how Google serves them, so another add-on you open could in principle reach it and read your captured reading. Only open add-ons you trust while the server is running.
 - **The skip list is a list.** It covers major banks, payment, login and account pages, but it can't name every private site. The password-box rule catches most of the rest.
 
 ## 6. Repository layout

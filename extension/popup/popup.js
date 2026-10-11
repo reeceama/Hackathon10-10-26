@@ -67,7 +67,16 @@ async function showSaved() {
     forget.className = "forget-one";
     forget.title = "Forget this page";
     forget.textContent = "×";
-    forget.addEventListener("click", () => chrome.runtime.sendMessage({ type: "forget", url: c.url }));
+    forget.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      forget.disabled = true;
+      item.style.opacity = "0.4";
+      try {
+        await chrome.runtime.sendMessage({ type: "forget", url: c.url });
+      } finally {
+        showSaved();  // redraw even if the storage change isn't reported
+      }
+    });
     item.append(title, status, tags, forget);
     return item;
   }));

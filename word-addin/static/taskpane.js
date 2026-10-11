@@ -22,6 +22,7 @@ const NUMBERS_SETTING = "referee-numbers"; // document setting: source URL -> IE
 const PROJECT_SETTING = "referee-project"; // document setting: only check against this project's reading
 const AUTO_SETTING = "referee-auto"; // document setting: check as the person writes
 const PAUSE_MS = 2500; // automatic checks wait for a pause in writing
+const POLL_MS = 5000; // and also run this often, in case Word doesn't report typing
 const OLD_SOURCE_YEARS = 10; // a supporting source older than this gets a "check for newer evidence" note
 const LIST_HEADINGS = ["References", "Reference list"];
 
@@ -73,6 +74,11 @@ Office.onReady(() => {
     if (autoToggle.checked) scheduleAutoCheck();
   };
   Office.context.document.addHandlerAsync(Office.EventType.DocumentSelectionChanged, scheduleAutoCheck);
+  // Word for Mac doesn't always report changes while typing, so also look for new sentences
+  // every few seconds. Only unchecked sentences are sent, so an unchanged document costs nothing.
+  setInterval(async () => {
+    if (autoToggle.checked && !running && !(await helperRunning())) runCheck("document", false, true);
+  }, POLL_MS);
 
   // Keep running in the background after the panel is closed, and start with the document
   // without opening the panel. Needs Word's shared runtime; older Word versions ignore this
@@ -105,6 +111,7 @@ function showWatching() {
 // Tell the backend someone is writing (at most once a minute), so the browser extension in
 // automatic mode captures what they read only while they're writing in Word.
 let lastSignal = 0;
+let lastBodyText = null;
 function signalWriting() {
   if (Date.now() - lastSignal < 60 * 1000) return;
   lastSignal = Date.now();
@@ -115,7 +122,21 @@ function scheduleAutoCheck() {
   signalWriting();
   if (!autoToggle.checked) return;
   clearTimeout(pauseTimer);
-  pauseTimer = setTimeout(() => runCheck("document", false, true), PAUSE_MS);
+  pauseTimer = setTimeout(async () => {
+    if (!(await helperRunning())) runCheck("document", false, true);
+  }, PAUSE_MS);
+}
+
+// The background Word helper (word-helper/) does the same job without a panel. When it's
+// running, automatic checks here stand down so citations aren't added twice.
+async function helperRunning() {
+  try {
+    const status = await fetch("/api/writing").then((r) => r.json());
+    if (status.helper) setStatus("The Referee Word helper is checking this document in the background.");
+    return Boolean(status.helper);
+  } catch {
+    return false;
+  }
 }
 
 // One check at a time; a request that arrives mid-check runs straight after it.
@@ -154,11 +175,13 @@ function setBusy(busy) {
 }
 
 // The sentence as first written, so adding a citation doesn't make it look new. Linked
-// citations can come back from Word with hidden link codes, so those are removed too, along
-// with any author-date brackets.
+// citations and Word citation fields can come back with hidden field codes, so those are
+// removed too, along with author-date brackets and IEEE numbers.
 function sentenceKey(sentence) {
   return sentence
     .replace(/HYPERLINK\s+(\\l\s+)?"[^"]*"/g, "")
+    .replace(/CITATION\s+\S+(\s+\\[a-z]\s+\S+)*/gi, "")
+    .replace(/\s*\[\d+\]/g, "")
     .replace(/\s*\([^()]*,\s*(?:\d{4}|n\.d\.|no date)\)/g, "")
     .replace(/\s+([.!?])/g, "$1")
     .replace(/\s{2,}/g, " ")
@@ -187,6 +210,7 @@ function setStatus(text) {
 }
 
 function addResult(text) {
+  if ([...resultsList.children].some((li) => li.textContent === text)) return;  // shown already
   const item = document.createElement("li");
   item.textContent = text;
   resultsList.appendChild(item);
@@ -616,6 +640,11 @@ async function check(scope, force, automatic = false) {
       const selection = context.document.getSelection();
       selection.load("text");
       await context.sync();
+      // The document changed since the last look: someone is writing.
+      if (body.text !== lastBodyText) {
+        if (lastBodyText !== null) signalWriting();
+        lastBodyText = body.text;
+      }
 
       // Each sentence remembers where to search for it.
       let sentences = [];

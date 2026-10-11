@@ -1,8 +1,9 @@
 #!/bin/sh
-# Starts the Referee server, and the Word add-in's HTTPS server, whenever you log in to your Mac,
-# and restarts them if they stop.
+# Starts the Referee server, the Word helper and the Word add-in's HTTPS server whenever you log
+# in to your Mac, and restarts them if they stop. The first time the helper reads Word, macOS asks
+# whether it may control Microsoft Word: allow it.
 # Run once from the repository folder: sh scripts/install-server.sh
-# To remove: for n in server word; do launchctl bootout gui/$(id -u)/com.referee.$n; rm ~/Library/LaunchAgents/com.referee.$n.plist; done
+# To remove: for n in server word helper; do launchctl bootout gui/$(id -u)/com.referee.$n; rm ~/Library/LaunchAgents/com.referee.$n.plist; done
 set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 LOGS="$HOME/Library/Logs/Referee"
@@ -35,4 +36,5 @@ PLIST
 
 install server "$REPO/server" "$REPO/.venv/bin/python" -m uvicorn main:app --port 8000
 install word "$REPO/word-addin" "$REPO/.venv/bin/python" server.py
+install helper "$REPO/word-helper" "$REPO/.venv/bin/python" helper.py
 echo "Referee installed. Logs: $LOGS"
