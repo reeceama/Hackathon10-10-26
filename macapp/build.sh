@@ -1,0 +1,53 @@
+#!/bin/sh
+# Builds Referee.app (the menu bar app) and installs it in ~/Applications.
+# Needs the Xcode command line tools. Run from anywhere: sh macapp/build.sh
+set -e
+HERE="$(cd "$(dirname "$0")" && pwd)"
+REPO="$(cd "$HERE/.." && pwd)"
+BUILD="$HERE/build"
+APP="$BUILD/Referee.app"
+
+rm -rf "$BUILD"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+
+swiftc -O -swift-version 5 -parse-as-library -target arm64-apple-macos14 \
+  -o "$APP/Contents/MacOS/Referee" "$HERE"/Sources/*.swift
+
+cp "$HERE"/Resources/whistle*.png "$APP/Contents/Resources/"
+
+# App icon: Resources/AppIcon.png (1024px, on Apple's icon grid) at every size macOS asks for.
+ICONSET="$BUILD/Referee.iconset"
+mkdir -p "$ICONSET"
+for size in 16 32 128 256 512; do
+  sips -z $size $size "$HERE/Resources/AppIcon.png" --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  double=$((size * 2))
+  sips -z $double $double "$HERE/Resources/AppIcon.png" --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+done
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Referee.icns"
+
+cat > "$APP/Contents/Info.plist" <<PLIST
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleName</key><string>Referee</string>
+  <key>CFBundleDisplayName</key><string>Referee</string>
+  <key>CFBundleIdentifier</key><string>com.reeceama.referee</string>
+  <key>CFBundleExecutable</key><string>Referee</string>
+  <key>CFBundleIconFile</key><string>Referee</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>1.0</string>
+  <key>CFBundleVersion</key><string>1</string>
+  <key>LSMinimumSystemVersion</key><string>14.0</string>
+  <key>LSUIElement</key><true/>
+  <key>NSAppleEventsUsageDescription</key><string>Referee's Word helper checks and cites the document you're writing in Word.</string>
+  <key>RefereeRepository</key><string>$REPO</string>
+</dict>
+</plist>
+PLIST
+
+codesign --force --sign - "$APP" >/dev/null 2>&1
+mkdir -p "$HOME/Applications"
+rm -rf "$HOME/Applications/Referee.app"
+cp -R "$APP" "$HOME/Applications/"
+echo "Installed $HOME/Applications/Referee.app"

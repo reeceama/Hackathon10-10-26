@@ -176,6 +176,7 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── dev/editor/             developer test page for checks (not user facing)
 │   └── icons/
 │
+├── macapp/                     Referee for Mac: menu bar app that runs the server and Word helper
 ├── word-helper/                background Word helper (AppleScript on macOS, COM on Windows)
 ├── word-addin/                 Word add-in (fallback)
 ├── obsidian-plugin/            Obsidian plugin
@@ -214,7 +215,7 @@ python eval_scifact.py analyse
 python eval_wording.py
 ```
 
-To have the server, the Word helper and the Word add-in's HTTPS server start whenever you log in, and restart if they stop, run `sh scripts/install-server.sh` once (macOS), or `scripts\install-windows.bat` on Windows (server and helper). See `word-helper/README.md`.
+On a Mac, `sh macapp/build.sh` builds **Referee.app** and installs it in `~/Applications`. It lives in the menu bar (a whistle: outlined when idle, filled while capturing), runs the server, the Word helper and the Word add-in's HTTPS server while it's open, and has a settings window for the project, how long unsaved reading is kept, the citation style in Word and opening at login. On Windows, `scripts\install-windows.bat` starts the server and Word helper at login. See `word-helper/README.md`.
 
 To switch research mode on with a macOS Focus, create two automations in the Shortcuts app: when the Focus turns on, run the shell script `curl -s -X POST localhost:8000/focus -H 'Content-Type: application/json' -d '{"on":true}'`, and when it turns off, the same with `false`.
 

@@ -12,7 +12,7 @@ It works with Word for Mac (through AppleScript) and Word for Windows (through W
 
 ## Install
 
-**Mac.** `sh scripts/install-server.sh` starts the server and the helper at login. The first time, macOS asks whether the helper may control Microsoft Word: allow it.
+**Mac.** Referee.app (`sh macapp/build.sh`) runs the helper while it is open; turn on "Open Referee at login" in its settings. The first time, macOS asks whether the helper may control Microsoft Word: allow it.
 
 **Windows.** Install the requirements plus `pywin32` into `.venv`, then run `scripts\install-windows.bat`. It starts the server and the helper now and whenever you log in.
 

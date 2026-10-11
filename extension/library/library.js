@@ -115,19 +115,21 @@ function renderSources() {
     item.innerHTML = `
       <div class="what">
         <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener">${escapeHtml(Cite.cleanTitle(s))}</a>
-        <div class="meta">
-          <span class="tag">${type}</span>${s.project ? `<span class="tag">${escapeHtml(s.project)}</span>` : ""}
+        <div class="meta">${escapeHtml([s.site, read].filter(Boolean).join(" · "))}</div>
+        <div class="tags">
           <span class="tag ${s.kept === false ? "temp" : "cited"}">${s.kept === false ? "Temporary" : "Saved"}</span>
-          <span class="tag ${n ? "cited" : ""}">${n ? `Backs ${n} claim${n === 1 ? "" : "s"}` : "Not cited yet"}</span>
-          ${escapeHtml([s.site, read].filter(Boolean).join(" · "))}
+          <span class="tag">${type}</span>
+          ${n ? `<span class="tag cited">Backs ${n} claim${n === 1 ? "" : "s"}</span>` : ""}
         </div>
       </div>
+      <div class="row-actions">
       <select class="move" aria-label="Project for this source">
         <option value="">No project</option>
         ${settings.projects.map((p) => `<option value="${escapeHtml(p)}" ${s.project === p ? "selected" : ""}>${escapeHtml(p)}</option>`).join("")}
       </select>
       ${s.kept === false ? `<button class="keep">Save</button>` : ""}
-      <button class="forget" title="Forget this source">×</button>`;
+      <button class="forget" title="Forget this source" aria-label="Forget this source">×</button>
+      </div>`;
     item.querySelector(".move").addEventListener("change", async (event) => {
       await chrome.runtime.sendMessage({ type: "post", path: "sources/move", body: { url: s.url, project: event.target.value } });
       toast(event.target.value ? `Moved to ${event.target.value}` : "Removed from its project");

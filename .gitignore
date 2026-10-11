@@ -21,3 +21,6 @@ server/eval_pr.png
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Built app
+macapp/build/
