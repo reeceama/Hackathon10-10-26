@@ -2,11 +2,13 @@
 
 <h1 align="center">Referee</h1>
 
-Referee checks your writing against the sources you have read. You add the articles, PDFs and YouTube videos you'll cite, or a browser extension collects what you read while researching, and as you write in Word, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
+Referee is an academic integrity tool. It checks your writing against the sources you have read: you add the articles, papers, PDFs and YouTube videos you'll cite, or a browser extension collects what you read while researching, and as you write in Word or Overleaf, each finished sentence is checked against that reading. Supported claims are shown with the exact quote that backs them and the citation to add, and Referee warns you when a source says the opposite, when a quotation doesn't match its source, or when wording has been copied without quotation marks.
 
-It never writes for you. It only checks, credits and warns.
+For mathematical writing it also compares the theorems and definitions you restate with the papers you cite, checks your notation, and checks your code and results. And it keeps the records coursework now asks for: notes from supervisor and group meetings, and a log of AI use from which your declaration is filled in.
 
-Built in one day for the Invisible AI hackathon on 10 October 2026, where the brief was AI that works inside what you're already doing rather than something you have to prompt.
+It never writes for you. It only checks, credits, warns and keeps records.
+
+The first version was built in one day for the Invisible AI hackathon on 10 October 2026, where the brief was AI that works inside what you're already doing rather than something you have to prompt; it's kept as the [Hackathon Submission](https://github.com/reeceama/Referee/releases/tag/hackathon-submission) release. This version builds on it for real coursework: a maths dissertation in LaTeX, mini-projects and group projects.
 
 ## Download
 
@@ -15,9 +17,9 @@ Built in one day for the Invisible AI hackathon on 10 October 2026, where the br
 1. Open the zip and drag **Referee** into Applications.
 2. Open it. The first time, macOS says it can't check the developer, because the app isn't notarised by Apple: go to **System Settings → Privacy & Security** and click **Open Anyway**. You only do this once.
 3. In Referee's settings, paste your [Anthropic API key](https://console.anthropic.com). It's kept in your Keychain.
-4. Add the sources you'll cite with **Add Source…** in the menu bar, or choose **Install Browser Extension…** to collect what you read automatically.
+4. Add the sources you'll cite with **Add Source…** in the menu bar, or choose **Install Browser Extension…** to collect what you read automatically. The extension works in Chrome, Brave and Edge, and also adds Referee's panel to Overleaf.
 
-Referee checks your writing as you type in Word, and updates itself when a new release comes out. There's no Windows app yet; Windows users can run it from the code (see [Running it](#6-running-it)).
+Referee checks your writing as you type in Word or Overleaf, and updates itself when a new release comes out. There's no Windows app yet; Windows users can run it from the code (see [Running it](#6-running-it)).
 
 ## Team members
 
@@ -41,7 +43,7 @@ Referee checks your writing as you type in Word, and updates itself when a new r
 
 Captured reading is temporary: it can be cited straight away, and is forgotten after 15 minutes (or an hour, or a day) unless you keep it. **Save for later** in the extension's popup keeps the page you're on, whether or not it was captured; sources added by hand are kept straight away, and any source your writing cites is kept automatically. Kept sources belong to the current project, chosen or created from the menu bar, the library or the popup. Projects are kept apart: writing is only checked against its own project's sources, plus any other projects you link it to in the library, where sources can also be moved between projects. The extension never runs in private (Incognito) windows. The library lists your reading, saved or temporary, and lets you save, move or forget any source.
 
-Text you highlight while reading is kept as a note on its source, and the passages you highlighted are tried first when checking your claims. Academic sources with a DOI (journal articles, arXiv papers) get their exact authors, year and journal from doi.org, and a warning if Crossref records a retraction.
+Text you highlight while reading is kept as a note on its source, and the passages you highlighted are tried first when checking your claims. Academic sources with a DOI (journal articles, arXiv papers) get their exact authors, year, journal, volume, issue, pages and abstract from doi.org, and a warning if Crossref records a retraction. Papers keep their mathematics: pages keep equations as TeX (from MathJax or MathML), and for a PDF, Referee reads the paper's arXiv LaTeX source, arXiv HTML or publisher's page when one exists (finding a journal paper's arXiv version by its title), matching each passage back to its PDF page so citations keep page numbers. **Re-read** in the library brings sources saved earlier up to date, keeping their project, highlights and checked claims.
 
 Banking, payment, login and account pages, email, social media, search results and writing tools are never captured, nor is any page with a password box. Before a page leaves the browser tab, every form field, text box and script is removed, so nothing anyone typed is sent.
 
@@ -57,25 +59,38 @@ Banking, payment, login and account pages, email, social media, search results a
 
 Referee also warns when a figure in the sentence isn't in the source, shows exactly which words of a misquote differ, note when another source you read points the other way, when a claim only holds by combining two sources, and when a supporting source is more than ten years old. The library summarises how many claims your reading backs, and flags leaning heavily on one source.
 
-In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are marked and cited, a reference list is kept at the end, and warnings become comments (and are listed in the library). Sentences are marked with coloured underlines (green supported, amber check the wording, red contradicted), or highlights, or nothing, as chosen in settings; **Remove Marks in Word** in the menu bar clears Referee's marks, leaving your own. The library, a window in Referee for Mac (and a page in the extension), lists everything you've read, manages projects, and gives the reference list for what you've cited in APA 7, Harvard, MLA 9, Chicago, IEEE, AMS or Vancouver, with page numbers for PDFs and timestamps for videos. It imports and exports BibTeX and RIS files, for Zotero, Mendeley, EndNote or LaTeX: imported entries are fetched by their link, DOI or arXiv ID and read, so Referee can check against them. Three reports open from it: **Before You Submit** (for each document, how many claims are backed, contradicted or need a source, everything worth fixing, and how varied and recent your sources are), **Research Trail** (a day-by-day timeline of what you read, saved, highlighted and claimed) and **Proof of Work** (what you read, when, and which claims it backs). Claims that need a source come with the closest reading you have and a Google Scholar search for their key terms: places to look, never text to use.
+In Word, the background Word helper (macOS and Windows) checks as you type with no add-in or panel: supported claims are marked, warnings become comments (and are listed in the library), and each supported sentence gets a comment suggesting its citation. Type it in and Referee adds the source to a reference list it keeps at the end; or switch on **Add citations automatically** in Settings to have citations typed in for you. Sentences are marked with coloured underlines (green supported, amber check the wording, red contradicted), or highlights, or nothing, as chosen in settings; **Remove Marks in Word** in the menu bar clears Referee's marks, leaving your own. The library, a window in Referee for Mac (and a page in the extension), lists everything you've read, manages projects, and gives the reference list for what you've cited in APA 7, Harvard, MLA 9, Chicago, IEEE, AMS or Vancouver, with page numbers for PDFs and timestamps for videos. It imports and exports BibTeX and RIS files, for Zotero, Mendeley, EndNote or LaTeX: imported entries are fetched by their link, DOI or arXiv ID and read, so Referee can check against them. Three reports open from it: **Before You Submit** (for each document, how many claims are backed, contradicted or need a source, everything worth fixing, and how varied and recent your sources are), **Research Trail** (a day-by-day timeline of what you read, saved, highlighted and claimed) and **Proof of Work** (what you read, when, and which claims it backs). Claims that need a source come with the closest reading you have and a Google Scholar search for their key terms: places to look, never text to use.
 
 If a sentence makes no claim and nothing you read relates to it, Referee stays silent rather than guessing.
+
+**In Overleaf.** The extension adds a small panel to Overleaf projects. It reads the LaTeX you're editing (leaving out maths, proofs, figures and commands), checks each finished sentence like the Word helper, and lists what it finds; clicking an item jumps to its line. Supported sentences come with a `\cite{}` key that matches Referee's BibTeX export, and an **Insert** button that adds it to the end of the sentence (or switch on automatic citations in Settings, which skips the sentence you're editing). For a sentence that already cites something, it says whether the cited paper is the one your reading says backs it. Overleaf's text is only ever changed by an insert, as an ordinary edit you can undo. The library's **Export .bib** gives the `refs.bib` file to upload to Overleaf, and each source has a button to copy its `\cite{}`.
+
+**Mathematics.** Theorems, lemmas, conjectures and definitions that cite a paper (for example `\begin{theorem}[{\cite[Theorem 2]{key}}]`) are compared with the paper's own statement, and real differences are listed: a missing or extra condition, a different conclusion, a changed constant or quantifier. Differences in notation or wording don't count, and nothing is ever suggested as a fix. Notation checks run instantly, without AI: `\ref`s to labels that don't exist, labels used twice, symbols used before they're introduced or introduced twice, results cited vaguely ("a theorem from lectures") without a citation, steps asserted with "clearly" or "obviously", and an "if and only if" whose proof never shows the converse.
+
+**Code.** Choose your project's code folder in Settings. Referee then lists the libraries your Python, R or C/C++ code uses that ask to be cited but that your writing doesn't cite (GUDHI, Ripser, scikit-learn, NumPy, R itself, ggplot2, lme4, the tidyverse, Eigen, GSL, CGAL and others), each with its BibTeX entry; and figures in your writing that are close to, but not the same as, a value in your results (CSV, JSON or notebook outputs), which usually means the code was re-run after you wrote them.
+
+**Meetings.** Notes from supervisor and group meetings, by project: date, attendees, notes, decisions and action points (what, who, by when, done). Action points not yet done are carried into the next meeting. A project's log exports as Markdown or LaTeX, and as the `decision-notes` and `who-did-what` files group projects ask for; link a project to its shared workspace (a GitHub repository or shared folder) and Referee keeps `notes/decision-notes.md` and `notes/who-did-what.md` up to date in it.
+
+**AI use.** A running record of each use of an AI tool: the tool and version, what you used it for, the key prompt, what it gave you and how you checked it. Your declaration is filled in from it with each project's own template: the standard Declaration A or B form, a paragraph in the style of a paper's acknowledgement, or your own wording. The declaration is assembled from your entries with a fixed template, not written by AI, and Referee includes itself as a tool once it has checked claims, since it uses Claude.
 
 **Learning from behaviour (not yet active in Word).** The server can learn which kinds of marker a person finds useful from what they do with them, such as dismissing a marker or opening its source, and stop showing the ones they keep rejecting. The Word helper doesn't report those actions yet, so in everyday use every marker the verifier accepts is shown.
 
 ## 2. How it works
 
 ```
-Browser extension, Add Source ──capture──▶ Backend (your laptop) ◀──check── Word
+Browser extension, Add Source ──capture──▶ Backend (your laptop) ◀──check── Word, Overleaf
                                 │
-                                ├─ extract.py    article text → overlapping passages
+                                ├─ extract.py    article text → overlapping passages, maths kept as TeX
                                 ├─ pdf.py        PDF text, with page numbers
+                                ├─ fulltext.py   a PDF's arXiv source, arXiv HTML or publisher page
                                 ├─ video.py      YouTube transcripts, with timestamps
                                 ├─ embeddings.py passages → vectors (runs locally)
                                 ├─ store.py      saved to disk; meaning and keyword search
                                 ├─ claims.py     does an unsupported sentence need a source?
                                 ├─ verify.py     Claude: supports / contradicts / neutral,
                                 │                plus quote and copying checks
+                                ├─ statements.py Claude: a restated theorem against the cited paper
+                                ├─ code_folder.py uncited libraries, figures that don't match results
                                 └─ feedback.py   learns which markers each person finds useful
 ```
 
@@ -89,7 +104,9 @@ Browser extension, Add Source ──capture──▶ Backend (your laptop) ◀�
 
 **Learning.** Behaviour events become labelled examples, with explicit actions weighted fully and implicit ones weighted less. A logistic regression on verifier confidence, search similarity and marker type is refitted after every event. Until there are enough events to cover both outcomes, every marker the verifier accepts is shown, so the evaluated threshold acts as the prior.
 
-**Privacy.** Only the sentence being checked and its closest passages are sent to Claude. The reading itself stays on your machine.
+**Theorems.** A theorem or definition that cites a paper is searched for only in that paper's saved passages, and Claude compares the two statements, listing only mathematical differences. Displayed equations and theorem headings are kept together with their statements when papers are read, so a statement split across lines by a web page or LaTeX isn't lost.
+
+**Privacy.** Only the sentence or statement being checked and its closest passages are sent to Claude. The reading, your code, meetings and AI use log stay on your machine.
 
 ## 3. Data and models
 
@@ -98,7 +115,8 @@ Browser extension, Add Source ──capture──▶ Backend (your laptop) ◀�
 | SciFact | 1,409 scientific claims with labelled evidence from 5,183 abstracts, used to evaluate the verifier |
 | trafilatura | Article text extraction from captured pages |
 | all-MiniLM-L6-v2 (ONNX) | Local sentence embeddings for search, run with ONNX Runtime |
-| Claude Haiku 5.5 | Claim verification, through the Anthropic API |
+| Claude Haiku 5.5 | Claim verification and theorem comparison, through the Anthropic API |
+| doi.org, Crossref, arXiv | Paper details, abstracts, retractions, LaTeX sources and HTML versions |
 | Wikipedia, NHS and BBC pages | Captured during development and used for the wording calibration |
 
 SciFact is not committed to this repository. The evaluation script expects it in `~/scifact/data`.
@@ -154,12 +172,17 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── api_key.py              your Anthropic API key, in Keychain or Credential Manager
 │   ├── extract.py              article text and passages
 │   ├── pdf.py                  PDF text and page numbers
+│   ├── fulltext.py             a PDF's maths-faithful text: arXiv source, arXiv HTML or publisher page
 │   ├── video.py                YouTube transcripts and timestamps
 │   ├── embeddings.py           local sentence embeddings
 │   ├── keywords.py             BM25 keyword search
 │   ├── store.py                passage storage and search
 │   ├── claims.py               does a sentence need a source?
 │   ├── verify.py               claim verification, quote, figure and copying checks
+│   ├── statements.py           theorems and definitions compared with the papers they cite
+│   ├── code_folder.py          the code folder: uncited libraries, figures that don't match results
+│   ├── meetings.py             meeting notes and action points, and their exports
+│   ├── ai_log.py               the AI use log and declarations
 │   ├── feedback.py             learns which markers each person finds useful
 │   ├── claim_log.py            claims each source has backed, for the library
 │   ├── reading.py              projects, and how long unsaved reading is kept
@@ -180,11 +203,12 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── content.js              captures article pages once they've been read
 │   ├── skip.js                 pages that are never captured
 │   ├── popup/                  research mode, projects, captured reading
-│   ├── library/                captured reading, references, proof of work
+│   ├── library/                captured reading, references, reports, BibTeX import and export
+│   ├── overleaf/               the Overleaf panel: reads the LaTeX, checks it, inserts citations
 │   ├── dev/editor/             developer test page for checks (not user facing)
 │   └── icons/
 │
-├── macapp/                     Referee for Mac: menu bar app, library, settings and updates
+├── macapp/                     Referee for Mac: menu bar app, library, meetings, AI use, settings and updates
 │   ├── Sources/                the app, in Swift
 │   ├── build.sh                builds it from this folder into /Applications
 │   ├── package.sh              builds the downloadable app, with its own Python
@@ -232,11 +256,11 @@ python eval_scifact.py analyse
 python eval_wording.py
 ```
 
-On a Mac, `sh macapp/build.sh` builds **Referee.app** from this folder and installs it in `/Applications`; `sh macapp/package.sh 2026-10-12` builds the downloadable version instead, named for its release, with its own Python, code and libraries inside, as `macapp/dist.noindex/Referee-mac.zip` and its checksum (Apple silicon); publish both as a GitHub release of the same name, and downloaded copies update themselves. The app lives in the menu bar (a whistle: outlined when idle, filled while capturing) and runs the server and the Word helper while it's open. Its menu has research mode, the current project, the citation style in Word, Add Source, the library, Install Browser Extension and settings (API key, how long unsaved reading is kept, opening at login). On Windows, `scripts\install-windows.bat` starts the server and Word helper at login. `tests/smoke_test.py` checks the background parts work, without Word or an API key; GitHub runs it on Windows and macOS after every push. See `word-helper/README.md`.
+On a Mac, `sh macapp/build.sh` builds **Referee.app** from this folder and installs it in `/Applications`; `sh macapp/package.sh 2026-10-12` builds the downloadable version instead, named for its release, with its own Python, code and libraries inside, as `macapp/dist.noindex/Referee-mac.zip` and its checksum (Apple silicon); publish both as a GitHub release of the same name, and downloaded copies update themselves. The app lives in the menu bar (a whistle: outlined when idle, filled while capturing) and runs the server and the Word helper while it's open. Its menu has research mode, the current project, how long unsaved reading is kept, Add Source, Remove Marks in Word, Install Browser Extension, the library, Meetings, AI Use and settings (API key, the research mode shortcut, Word and Overleaf settings, the code folder, opening at login, and whether to show in the menu bar). With the menu bar icon hidden, open Referee from Applications or Spotlight to get to settings, the library, meetings and AI use. On Windows, `scripts\install-windows.bat` starts the server and Word helper at login. `tests/smoke_test.py` checks the background parts work, without Word or an API key; GitHub runs it on Windows and macOS after every push. See `word-helper/README.md`.
 
 To switch research mode on with a macOS Focus, create two automations in the Shortcuts app: when the Focus turns on, run the shell script `curl -s -X POST localhost:8000/focus -H 'Content-Type: application/json' -d '{"on":true}'`, and when it turns off, the same with `false`.
 
-To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. Start writing in Word and read some sources; anything you read while writing is captured. Open the library from the popup to see your reading and references. API docs are at http://localhost:8000/docs while the backend is running.
+To load the extension, open `chrome://extensions`, turn on **Developer mode**, choose **Load unpacked** and select the `extension` folder. (In Brave or Edge, use `brave://extensions` or `edge://extensions`.) Start writing in Word or Overleaf and read some sources; anything you read while writing is captured. Open the library from the popup to see your reading and references. API docs are at http://localhost:8000/docs while the backend is running.
 
 ## 7. API
 
@@ -271,6 +295,17 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `GET /references?project=&style=` | | the reference list for what's been cited |
 | `GET /report?project=&style=` | | the proof-of-work report, as a web page |
 | `GET /api-key`, `POST /api-key`, `DELETE /api-key` | `{key}` | whether a key is saved; checks and saves one; removes it |
+| `POST /statement` | `{statement, kind, keys, label}` | a theorem or definition compared with the cited paper: `{found, quote, page, source, differences}` |
+| `POST /code` | `{text}` (the LaTeX) | against the code folder: `{folder, software, numbers}` |
+| `POST /claims/current` | `{document, text}` or `{removed}` | drops claims whose sentences were reworded or deleted |
+| `POST /sources/reread` | `{url}` | reads a saved source again, with its maths and abstract |
+| `GET /meetings?project=`, `POST /meetings`, `DELETE /meetings?id=` | a meeting | lists, saves or deletes meetings |
+| `GET /meetings/export?project=&format=` | | `markdown`, `latex`, `decision-notes` or `who-did-what` |
+| `GET /meetings/workspace?project=`, `POST /meetings/workspace` | `{project, folder}` | the shared workspace where a project's notes files are kept up to date |
+| `GET /ai-log?project=`, `POST /ai-log`, `DELETE /ai-log?id=` | an entry | lists, saves or deletes AI use entries |
+| `GET /ai-log/declaration?project=` | | the project's declaration, and its template |
+| `POST /ai-log/template` | `{project, preset, used, unused}` | sets a project's declaration template |
+| `GET /ai-log/export?project=&format=markdown\|latex` | | the declaration and the full record |
 
 `label` is `supports`, `contradicts` or `misquote`. Feedback events are `opened_source`, `edited_after`, `dismissed` and `ignored`.
 
