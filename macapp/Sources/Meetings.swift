@@ -275,7 +275,7 @@ struct MeetingEditor: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .firstTextBaseline) {
-                    TextField("Title, e.g. Meeting with Omer", text: $meeting.title)
+                    TextField("Title", text: $meeting.title)
                         .textFieldStyle(.plain)
                         .font(.title2.weight(.semibold))
                     DatePicker("Date", selection: date, displayedComponents: .date)

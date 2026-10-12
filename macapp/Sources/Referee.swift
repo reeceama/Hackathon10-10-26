@@ -876,7 +876,7 @@ struct TodoistView: View {
             HStack {
                 Text("Your name in meetings")
                 Spacer()
-                TextField("e.g. Reece", text: $name)
+                TextField("Your name", text: $name)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 180)
                     .onSubmit { WordSettings.yourName = name }
