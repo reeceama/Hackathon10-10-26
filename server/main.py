@@ -31,6 +31,7 @@ import bib
 import statements
 from meetings import Meetings
 from ai_log import AILog
+import todoist
 import code_folder as code_check
 import api_key
 from claim_log import ClaimLog
@@ -366,6 +367,36 @@ def check_statement(req: StatementRequest):
 meetings = Meetings(paths.data("meetings.json"))
 
 
+todoist_sync = todoist.Sync(meetings)
+todoist_sync.start()
+
+
+@app.get("/todoist")
+def todoist_status():
+    return todoist_sync.status()
+
+
+@app.post("/todoist")
+def todoist_connect(body: dict):
+    # Checks and saves a Todoist token, then syncs your action points straight away.
+    result = todoist.connect(body.get("token", ""))
+    if result["ok"]:
+        todoist_sync.soon()
+    return result
+
+
+@app.delete("/todoist")
+def todoist_disconnect():
+    todoist.disconnect()
+    return {"ok": True}
+
+
+@app.post("/todoist/sync")
+def todoist_sync_now():
+    todoist_sync.soon()
+    return {"ok": True}
+
+
 @app.get("/meetings")
 def list_meetings(project: str = "all"):
     return meetings.all(library_project(project))
@@ -373,7 +404,9 @@ def list_meetings(project: str = "all"):
 
 @app.post("/meetings")
 def save_meeting(meeting: dict):
-    return meetings.save(meeting)
+    saved = meetings.save(meeting)
+    todoist_sync.soon()  # new, changed or ticked-off action points reach Todoist straight away
+    return saved
 
 
 @app.delete("/meetings")
@@ -423,15 +456,18 @@ def delete_ai_use(id: str):
 
 @app.get("/ai-log/declaration")
 def ai_declaration(project: str = "all"):
-    chosen = library_project(project)
-    return {"text": ai_log.declaration(chosen, referee_checks(chosen)), **ai_log.template(chosen)}
+    chosen = "*" if project == "all" else library_project(project)  # all projects: the default wording
+    own = chosen == "*" or chosen in ai_log.templates
+    return {"text": ai_log.declaration(chosen, referee_checks(None if chosen == "*" else chosen)),
+            **ai_log.template(chosen), "own": own}
 
 
 @app.post("/ai-log/template")
 def set_ai_template(body: dict):
     # A project's declaration wording: a preset ("standard", "paragraph") or custom text with
     # {tools}, {system}, {purposes} and {checks} filled in from the log.
-    return ai_log.set_template(library_project(body.get("project", "all")), body.get("preset", "standard"),
+    project = body.get("project", "all")
+    return ai_log.set_template("*" if project == "all" else library_project(project), body.get("preset", "custom"),
                                body.get("used", ""), body.get("unused", ""))
 
 

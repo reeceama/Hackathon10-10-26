@@ -97,7 +97,8 @@ class Meetings:
             "notes": meeting.get("notes") or "",
             "decisions": meeting.get("decisions") or "",
             "actions": [{"id": a.get("id") or uuid.uuid4().hex, "text": (a.get("text") or "").strip(),
-                         "who": (a.get("who") or "").strip(), "due": (a.get("due") or "").strip(), "done": bool(a.get("done"))}
+                         "who": (a.get("who") or "").strip(), "due": (a.get("due") or "").strip(), "done": bool(a.get("done")),
+                         **self._todoist(meeting.get("id"), a)}
                         for a in meeting.get("actions") or []],
             "created": meeting.get("created") or time.time(),
         }
@@ -105,6 +106,16 @@ class Meetings:
         self.items = [m for m in self.items if m["id"] != clean["id"]] + [clean]
         self._save({clean["project"], old})
         return clean
+
+    def _todoist(self, meeting_id: Optional[str], action: Dict) -> Dict:
+
+        """
+        An action point's link to its Todoist task. The app doesn't send these back, so they're
+        kept from the saved copy of the same action point.
+        """
+
+        saved = next((a for m in self.items if m["id"] == meeting_id for a in m.get("actions", []) if a.get("id") == action.get("id")), {})
+        return {k: action.get(k, saved.get(k)) for k in ("todoist_id", "todoist_sent", "todoist_gone") if action.get(k, saved.get(k)) is not None}
 
     def delete(self, meeting_id: str) -> bool:
 

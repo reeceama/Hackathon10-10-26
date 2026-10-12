@@ -28,7 +28,7 @@ final class AIUseModel: ObservableObject {
     @Published var filter = "all"
     @Published var selected: String?
     @Published var declaration = ""
-    @Published var preset = "standard"       // this project's template: "standard", "paragraph" or "custom"
+    @Published var preset = "custom"         // this project's template: "paragraph" or "custom" (its own wording)
     @Published var used = ""                 // its wording when AI was used, with {tools} and so on
     @Published var unused = ""               // and when it wasn't
     private var current = ""
@@ -57,7 +57,7 @@ final class AIUseModel: ObservableObject {
     func draft() async {
         let found = await API.getPath("ai-log/declaration?project=\(query)") ?? [:]
         declaration = found["text"] as? String ?? ""
-        preset = found["preset"] as? String ?? "standard"
+        preset = found["preset"] as? String ?? "custom"
         used = found["used"] as? String ?? ""
         unused = found["unused"] as? String ?? ""
     }
@@ -186,48 +186,51 @@ struct AIUseView: View {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Declaration").font(.title2.weight(.semibold)).padding(.top, 6)
                 if model.filter == "all" {
-                    Text("Choose a project above to set its own declaration. Each project keeps its own wording: the standard form for a mini-project, a paragraph for a dissertation, or your own.")
+                    Text("Choose a project above to see its declaration. Each project has its own wording, since different work asks for different declarations.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    Picker("Template", selection: Binding(get: { model.preset }, set: { model.setTemplate($0) })) {
-                        Text("Standard form (A or B)").tag("standard")
-                        Text("Paragraph").tag("paragraph")
-                        if model.preset == "custom" { Text("Custom").tag("custom") }
+                    Picker("Wording", selection: Binding(get: { model.preset }, set: { value in
+                        if value == "paragraph" { model.setTemplate("paragraph") } else { model.preset = "custom" }
+                    })) {
+                        Text("Your module's wording").tag("custom")
+                        Text("A paragraph").tag("paragraph")
                     }
                     .pickerStyle(.segmented)
                     .labelsHidden()
                     .fixedSize()
-                }
-                Text("Filled in from your log with a fixed template, not by AI: every line comes from an entry you made, plus Referee's own checks (Referee uses Claude, so it counts as AI use). Check it before use.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                Text(model.declaration)
-                    .textSelection(.enabled)
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassCard()
-                Button(copied == "declaration" ? "Copied" : "Copy Declaration") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(model.declaration, forType: .string)
-                    flash("declaration")
-                }
-                .glassButton()
-                if model.filter != "all" {
-                    DisclosureGroup("Edit wording for this project") {
+                    if model.declaration.isEmpty {
+                        Text("No wording yet. Paste the declaration your module asks for below, putting {tools}, {system}, {purposes} and {checks} where your answers go. Referee fills them in from your log.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("Filled in from your log with a fixed template, not by AI: every line comes from an entry you made, plus Referee's own checks (Referee uses Claude, so it counts as AI use). Check it before use.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(model.declaration)
+                            .textSelection(.enabled)
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .glassCard()
+                        Button(copied == "declaration" ? "Copied" : "Copy Declaration") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(model.declaration, forType: .string)
+                            flash("declaration")
+                        }
+                        .glassButton()
+                    }
+                    if model.preset == "custom" {
                         VStack(alignment: .leading, spacing: 10) {
-                            Text("{tools}, {system}, {purposes} and {checks} are filled in from your log.")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
                             Text("When AI was used").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                             TextEditor(text: $model.used).font(.body).scrollContentBackground(.hidden).padding(6).frame(minHeight: 140).glassCard()
                             Text("When AI wasn't used").font(.subheadline.weight(.semibold)).foregroundStyle(.secondary)
                             TextEditor(text: $model.unused).font(.body).scrollContentBackground(.hidden).padding(6).frame(minHeight: 60).glassCard()
                             Button("Save Wording") { model.setTemplate("custom", used: model.used, unused: model.unused) }.glassButton()
                         }
-                        .padding(.top, 8)
+                        .padding(.top, 4)
                     }
                 }
             }

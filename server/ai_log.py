@@ -22,25 +22,17 @@ from typing import Dict, List, Optional
 from meetings import _tex, _when
 
 
-OPENING = ("This mini-project is my own work. I am citing all sources of material I used, including lecture notes, "
-           "online material and books, and I have written the material in my own words without copying "
-           "significant parts of the text verbatim.")
-
 # Declaration templates. Placeholders are filled from the log: {tools}, {system}, {purposes}, {checks}.
+# No institution's wording is built in: each person enters theirs once, as their default for every
+# project ("*"), or for one project.
 PRESETS = {
-    "standard": {  # QMUL's standard declarations A and B
-        "used": ("Declaration A (generative AI used)\n\n" + OPENING + "\nI have used generative AI as follows:\n\n"
-                 "tool and version: {tools}\noperating system: {system}\nfor the purposes of: {purposes}\n"
-                 "I have verified the output by: {checks}"),
-        "unused": "Declaration B (generative AI not used)\n\n" + OPENING + " I have not used generative AI.",
-    },
     "paragraph": {  # in the style of a paper's AI acknowledgement
         "used": ("Generative AI ({tools}) was used for {purposes}. Its output was checked by {checks}. I independently "
                  "checked everything the tools contributed and take full responsibility for the contents."),
         "unused": "No generative AI tools were used in this work.",
     },
 }
-
+DEFAULT = "*"  # the template for projects without their own
 
 class AILog:
 
@@ -60,28 +52,29 @@ class AILog:
     def template(self, project: Optional[str]) -> Dict:
 
         """
-        A project's declaration template: {"preset", "used", "unused"}. The standard form unless changed.
+        A project's declaration template: {"preset", "used", "unused"}. Its own if set, else the
+        person's default, else empty (to be filled in with their institution's wording).
         """
 
-        chosen = self.templates.get(project or "")
-        if chosen:
-            return chosen
-        return {"preset": "standard", **PRESETS["standard"]}
+        return (self.templates.get(project or "") or self.templates.get(DEFAULT)
+                or {"preset": "custom", "used": "", "unused": ""})
 
     def set_template(self, project: Optional[str], preset: str, used: str = "", unused: str = "") -> Dict:
 
         """
-        Sets a project's template: a preset as it is, or "custom" wording.
+        Sets a project's template, or the default with project "*": a preset as it is, or custom
+        wording. Choosing "default" removes a project's own template, so it uses the default again.
         """
 
-        if preset in PRESETS and not used and not unused:
-            chosen = {"preset": preset, **PRESETS[preset]}
+        key = project or ""
+        if preset == "default" and key != DEFAULT:
+            self.templates.pop(key, None)
+        elif preset in PRESETS and not used and not unused:
+            self.templates[key] = {"preset": preset, **PRESETS[preset]}
         else:
-            chosen = {"preset": "custom" if preset not in PRESETS else preset,
-                      "used": used or PRESETS["standard"]["used"], "unused": unused or PRESETS["standard"]["unused"]}
-        self.templates[project or ""] = chosen
+            self.templates[key] = {"preset": "custom", "used": used, "unused": unused}
         self.templates_path.write_text(json.dumps(self.templates, indent=1), encoding="utf-8")
-        return chosen
+        return self.template(project)
 
     def _save(self) -> None:
 
@@ -159,30 +152,28 @@ class AILog:
 
         template = self.template(project)
         fields = self.fields(project, referee_claims)
+        if not template["used"].strip() and not template["unused"].strip():
+            return ""  # no wording yet: the app asks for the institution's
         if fields is None:
             return template["unused"]
         return re.sub(r"\{(tools|system|purposes|checks)\}", lambda m: fields[m.group(1)], template["used"])
-
-    def standard(self, project: Optional[str], referee_claims: int = 0) -> str:
-
-        return self.declaration(project, referee_claims)
 
     def export(self, project: Optional[str], format: str = "markdown", referee_claims: int = 0) -> str:
 
         entries = list(reversed(self.all(project)))
         name = project if project else "All projects" if project is None else "No project"
-        standard = self.declaration(project, referee_claims)
+        declared = self.declaration(project, referee_claims) or "[Set your declaration's wording in Referee: AI Use, Declaration.]"
         if format == "latex":
             # Paragraphs, with the form's lines kept apart by line breaks (never on an empty line).
-            form = "\n\n".join(" \\\\\n".join(_tex(line) for line in block.split("\n")) for block in standard.split("\n\n"))
-            out = [r"\section*{Declaration of Authenticity and AI-use}", form, "", r"\subsection*{Record of use: " + _tex(name) + "}"]
+            form = "\n\n".join(" \\\\\n".join(_tex(line) for line in block.split("\n")) for block in declared.split("\n\n"))
+            out = [r"\section*{Declaration of AI use}", form, "", r"\subsection*{Record of use: " + _tex(name) + "}"]
             for e in entries:
                 out.append(r"\paragraph{" + _tex(f"{_when(e['date'])}, {(e['tool'] + ' ' + e['version']).strip() or 'AI tool'}") + "}")
                 for label, key in (("Used for", "purpose"), ("Prompt", "prompt"), ("Output", "response"), ("Checked by", "checked")):
                     if e[key].strip():
                         out.append(r"\textit{" + label + r":} " + _tex(e[key].strip()).replace("\n", "\n\n") + "\n")
             return "\n".join(out).rstrip() + "\n"
-        lines = ["# Declaration of Authenticity and AI-use", "", standard, "", f"## Record of use: {name}", ""]
+        lines = ["# Declaration of AI use", "", declared, "", f"## Record of use: {name}", ""]
         for e in entries:
             lines += [f"### {_when(e['date'])}, {(e['tool'] + ' ' + e['version']).strip() or 'AI tool'}", ""]
             for label, key in (("Used for", "purpose"), ("Prompt", "prompt"), ("Output", "response"), ("Checked by", "checked")):

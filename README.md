@@ -69,9 +69,9 @@ If a sentence makes no claim and nothing you read relates to it, Referee stays s
 
 **Code.** Choose your project's code folder in Settings. Referee then lists the libraries your Python, R or C/C++ code uses that ask to be cited but that your writing doesn't cite (GUDHI, Ripser, scikit-learn, NumPy, R itself, ggplot2, lme4, the tidyverse, Eigen, GSL, CGAL and others), each with its BibTeX entry; and figures in your writing that are close to, but not the same as, a value in your results (CSV, JSON or notebook outputs), which usually means the code was re-run after you wrote them.
 
-**Meetings.** Notes from supervisor and group meetings, by project: date, attendees, notes, decisions and action points (what, who, by when, done). Action points not yet done are carried into the next meeting. A project's log exports as Markdown or LaTeX, and as the `decision-notes` and `who-did-what` files group projects ask for; link a project to its shared workspace (a GitHub repository or shared folder) and Referee keeps `notes/decision-notes.md` and `notes/who-did-what.md` up to date in it.
+**Meetings.** Notes from supervisor and group meetings, by project: date, attendees, notes, decisions and action points (what, who, by when, done). Action points not yet done are carried into the next meeting. A project's log exports as Markdown or LaTeX, and as the `decision-notes` and `who-did-what` files group projects ask for; link a project to its shared workspace (a GitHub repository or shared folder) and Referee keeps `notes/decision-notes.md` and `notes/who-did-what.md` up to date in it. Connect Todoist in Settings and your own action points (where "who" is your name, "me" or everyone) become tasks in a Todoist project of the same name, with their due dates; ticking one off in either app ticks it off in both.
 
-**AI use.** A running record of each use of an AI tool: the tool and version, what you used it for, the key prompt, what it gave you and how you checked it. Your declaration is filled in from it with each project's own template: the standard Declaration A or B form, a paragraph in the style of a paper's acknowledgement, or your own wording. The declaration is assembled from your entries with a fixed template, not written by AI, and Referee includes itself as a tool once it has checked claims, since it uses Claude.
+**AI use.** A running record of each use of an AI tool: the tool and version, what you used it for, the key prompt, what it gave you and how you checked it. Your declaration is filled in from it with each project's own wording: paste the declaration your module asks for, with `{tools}`, `{system}`, `{purposes}` and `{checks}` where your answers go, or use a paragraph in the style of a paper's acknowledgement. No institution's wording is built in, and every project starts empty. The declaration is assembled from your entries with a fixed template, not written by AI, and Referee includes itself as a tool once it has checked claims, since it uses Claude.
 
 **Learning from behaviour (not yet active in Word).** The server can learn which kinds of marker a person finds useful from what they do with them, such as dismissing a marker or opening its source, and stop showing the ones they keep rejecting. The Word helper doesn't report those actions yet, so in everyday use every marker the verifier accepts is shown.
 
@@ -182,6 +182,7 @@ Ignoring stock phrasing widened the margin more than five times. The chosen sett
 │   ├── statements.py           theorems and definitions compared with the papers they cite
 │   ├── code_folder.py          the code folder: uncited libraries, figures that don't match results
 │   ├── meetings.py             meeting notes and action points, and their exports
+│   ├── todoist.py              your action points as Todoist tasks, both ways
 │   ├── ai_log.py               the AI use log and declarations
 │   ├── feedback.py             learns which markers each person finds useful
 │   ├── claim_log.py            claims each source has backed, for the library
@@ -302,9 +303,11 @@ To load the extension, open `chrome://extensions`, turn on **Developer mode**, c
 | `GET /meetings?project=`, `POST /meetings`, `DELETE /meetings?id=` | a meeting | lists, saves or deletes meetings |
 | `GET /meetings/export?project=&format=` | | `markdown`, `latex`, `decision-notes` or `who-did-what` |
 | `GET /meetings/workspace?project=`, `POST /meetings/workspace` | `{project, folder}` | the shared workspace where a project's notes files are kept up to date |
+| `GET /todoist`, `POST /todoist`, `DELETE /todoist` | `{token}` | Todoist connection: status; checks and saves a token; disconnects |
+| `POST /todoist/sync` | | syncs action points with Todoist now (otherwise every three minutes, and after each meeting change) |
 | `GET /ai-log?project=`, `POST /ai-log`, `DELETE /ai-log?id=` | an entry | lists, saves or deletes AI use entries |
 | `GET /ai-log/declaration?project=` | | the project's declaration, and its template |
-| `POST /ai-log/template` | `{project, preset, used, unused}` | sets a project's declaration template |
+| `POST /ai-log/template` | `{project, preset, used, unused}` | sets a project's declaration wording: `paragraph`, or `custom` with its text |
 | `GET /ai-log/export?project=&format=markdown\|latex` | | the declaration and the full record |
 
 `label` is `supports`, `contradicts` or `misquote`. Feedback events are `opened_source`, `edited_after`, `dismissed` and `ignored`.

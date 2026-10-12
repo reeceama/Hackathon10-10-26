@@ -214,6 +214,12 @@ enum WordSettings {
         set { config["overleaf_auto_cite"] = newValue }
     }
 
+    /// Your name as you write it in meetings' "who", so your action points can go to Todoist.
+    static var yourName: String {
+        get { config["your_name"] as? String ?? "" }
+        set { config["your_name"] = newValue.trimmingCharacters(in: .whitespaces) }
+    }
+
     /// How the Word helper marks the sentences it checks: "underline", "highlight" or "none"
     /// (citations and comments are added either way).
     static var marks: String {
@@ -647,6 +653,9 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+            card(title: "Todoist", symbol: "checklist") {
+                TodoistView()
+            }
             card(title: "Anthropic", symbol: "key") {
                 ApiKeyView(model: model)
             }
@@ -852,6 +861,72 @@ struct WindowGlass: NSViewRepresentable {
 
 /// The repository this app was built from: its Python parts and the extension folder.
 let repository = URL(fileURLWithPath: Bundle.main.object(forInfoDictionaryKey: "RefereeRepository") as? String ?? "")
+
+/// Connects Todoist: your meeting action points become tasks, and ticking either off ticks off both.
+struct TodoistView: View {
+
+    @State private var connected = false
+    @State private var token = ""
+    @State private var name = WordSettings.yourName
+    @State private var message: String?
+    @State private var working = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Your name in meetings")
+                Spacer()
+                TextField("e.g. Reece", text: $name)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    .onSubmit { WordSettings.yourName = name }
+                    .onChange(of: name) { _, value in WordSettings.yourName = value }
+            }
+            Divider().opacity(0.4)
+            if connected {
+                HStack {
+                    Label("Connected", systemImage: "checkmark.circle.fill").foregroundStyle(.green)
+                    Spacer()
+                    Button("Sync Now") { Task { _ = await API.post("todoist/sync", [:]); message = "Syncing…" } }.glassButton()
+                    Button("Disconnect") { Task { _ = await API.delete("todoist"); await refresh() } }.glassButton()
+                }
+            } else {
+                HStack {
+                    SecureField("Todoist API token", text: $token).textFieldStyle(.roundedBorder)
+                    Button(working ? "Checking…" : "Connect") { connect() }.glassButton().disabled(token.isEmpty || working)
+                }
+            }
+            Text(message ?? (connected
+                ? "Action points for you, \"me\" or everyone go to a Todoist project named after their Referee project. Ticking one off in either app ticks it off in both."
+                : "Find your token in Todoist: Settings, Integrations, Developer. It's kept in your Keychain."))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .task { await refresh() }
+    }
+
+    private func refresh() async {
+        connected = (await API.get("todoist"))?["connected"] as? Bool ?? false
+    }
+
+    private func connect() {
+        working = true
+        message = nil
+        let entered = token
+        Task {
+            let result = await API.post("todoist", ["token": entered], timeout: 20)
+            working = false
+            if result?["ok"] as? Bool == true {
+                token = ""
+                message = nil
+                await refresh()
+            } else {
+                message = result?["reason"] as? String ?? "Referee isn't running. Open it and try again."
+            }
+        }
+    }
+}
 
 /// Opens Referee's windows by id, from anywhere. SwiftUI only lets views open windows, so any
 /// view that appears (the menu bar icon, or any window) hands over its opener. With none yet, as
