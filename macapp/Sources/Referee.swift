@@ -313,7 +313,7 @@ struct MenuContent: View {
         Text(statusLine)
         Text("\(model.saved) Saved · \(model.temporary) Temporary")
         if model.online && !model.hasKey {
-            Button("Add API Key…") { show("settings") }
+            Button("Add API Key…") { show("integrations") }
         }
         Divider()
         Toggle("Research Mode", isOn: Binding(get: { model.focus }, set: { model.setResearch($0) }))
@@ -653,11 +653,15 @@ struct SettingsView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            card(title: "Todoist", symbol: "checklist") {
-                TodoistView()
-            }
-            card(title: "Anthropic", symbol: "key") {
-                ApiKeyView(model: model)
+            card(title: "Integrations", symbol: "puzzlepiece.extension") {
+                HStack(spacing: 12) {
+                    Text("Connect the services Referee works with: an AI provider for checking, and Todoist for your meeting action points.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Manage…") { Windows.open("integrations") }.glassButton().fixedSize()
+                }
             }
             card(title: "General", symbol: "gearshape") {
                 row("Open Referee at login") {
@@ -946,7 +950,7 @@ struct TodoistView: View {
             window.makeKeyAndOrderFront(nil)
             return
         }
-        let view = id == "library" ? AnyView(LibraryView()) : id == "meetings" ? AnyView(MeetingsView()) : id == "ai-use" ? AnyView(AIUseView()) : AnyView(SettingsView(model: .shared))
+        let view = id == "library" ? AnyView(LibraryView()) : id == "meetings" ? AnyView(MeetingsView()) : id == "ai-use" ? AnyView(AIUseView()) : id == "integrations" ? AnyView(IntegrationsView(model: .shared)) : AnyView(SettingsView(model: .shared))
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
@@ -1028,6 +1032,11 @@ struct RefereeApp: App {
         Window("Library", id: "library") {
             LibraryView().background(WindowOpener())
         }
+        .windowStyle(.hiddenTitleBar)
+        Window("Integrations", id: "integrations") {
+            IntegrationsView(model: model).background(WindowOpener())
+        }
+        .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
         Window("AI Use", id: "ai-use") {
             AIUseView().background(WindowOpener())
