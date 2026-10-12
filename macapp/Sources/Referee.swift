@@ -333,6 +333,8 @@ struct MenuContent: View {
         Button("Remove Marks in Word") { WordSettings.removeMarks() }
         Button("Install Browser Extension…") { BrowserExtension.install(repo: repo) }
         Button("Open Library") { show("library") }
+        Button("Meetings") { show("meetings") }
+        Button("AI Use") { show("ai-use") }
         Button("Settings…") { show("settings") }
             .keyboardShortcut(",")
         if Updater.shared.current != nil {
@@ -562,6 +564,10 @@ struct SettingsView: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity)
                 }
+                Divider().opacity(0.4)
+                row("Research mode shortcut") {
+                    ShortcutRecorder()
+                }
             }
             card(title: "Writing", symbol: "doc.text") {
                 Picker("Writing in", selection: $writingIn) {
@@ -651,43 +657,43 @@ struct SettingsView: View {
                         .labelsHidden()
                 }
                 Divider().opacity(0.4)
-                row("Research mode shortcut") {
-                    ShortcutRecorder()
-                }
-                Divider().opacity(0.4)
                 row("Show in menu bar") {
                     Toggle("Show in menu bar", isOn: $showInMenuBar)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
-                if !showInMenuBar {
-                    Text("Referee keeps working in the background. Open it from Applications or Spotlight to get back here, and the Library from the button at the top.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+
             }
         }
     }
 
     private var header: some View {
-        HStack(spacing: 12) {
-            Image(nsImage: whistle(model.capturing))
-                .resizable()
-                .frame(width: 26, height: 26)
-            Text("Referee").font(.title2.weight(.semibold))
-            Spacer()
-            Button("Open Library") { Windows.open("library") }.glassButton()
-            HStack(spacing: 6) {
-                Circle().fill(model.online ? (model.capturing ? Color.green : Color.secondary) : Color.orange)
-                    .frame(width: 7, height: 7)
-                Text(!model.online ? "Server not running" : model.capturing ? "Capturing" : "Not capturing")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 12) {
+                Image(nsImage: whistle(model.capturing))
+                    .resizable()
+                    .frame(width: 26, height: 26)
+                Text("Referee").font(.title2.weight(.semibold)).fixedSize()
+                Spacer()
+                HStack(spacing: 6) {
+                    Circle().fill(model.online ? (model.capturing ? Color.green : Color.secondary) : Color.orange)
+                        .frame(width: 7, height: 7)
+                    Text(!model.online ? "Server not running" : model.capturing ? "Capturing" : "Not capturing")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .glassCapsule()
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .glassCapsule()
+            // The other windows, on a row of their own so the header never squeezes them.
+            HStack(spacing: 8) {
+                Button { Windows.open("library") } label: { Label("Library", systemImage: "books.vertical").fixedSize() }.glassButton()
+                Button { Windows.open("meetings") } label: { Label("Meetings", systemImage: "person.2").fixedSize() }.glassButton()
+                Button { Windows.open("ai-use") } label: { Label("AI Use", systemImage: "checkmark.seal").fixedSize() }.glassButton()
+                Spacer()
+            }
         }
     }
 
@@ -865,7 +871,7 @@ let repository = URL(fileURLWithPath: Bundle.main.object(forInfoDictionaryKey: "
             window.makeKeyAndOrderFront(nil)
             return
         }
-        let view = id == "library" ? AnyView(LibraryView()) : AnyView(SettingsView(model: .shared))
+        let view = id == "library" ? AnyView(LibraryView()) : id == "meetings" ? AnyView(MeetingsView()) : id == "ai-use" ? AnyView(AIUseView()) : AnyView(SettingsView(model: .shared))
         let window = NSWindow(contentViewController: NSHostingController(rootView: view))
         window.styleMask.insert(.fullSizeContentView)
         window.titlebarAppearsTransparent = true
@@ -946,6 +952,14 @@ struct RefereeApp: App {
         }
         Window("Library", id: "library") {
             LibraryView().background(WindowOpener())
+        }
+        .windowStyle(.hiddenTitleBar)
+        Window("AI Use", id: "ai-use") {
+            AIUseView().background(WindowOpener())
+        }
+        .windowStyle(.hiddenTitleBar)
+        Window("Meetings", id: "meetings") {
+            MeetingsView().background(WindowOpener())
         }
         .windowStyle(.hiddenTitleBar)
         Window("Add Source", id: "add-source") {

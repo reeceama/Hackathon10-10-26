@@ -29,6 +29,8 @@ import paths
 import library
 import bib
 import statements
+from meetings import Meetings
+from ai_log import AILog
 import code_folder as code_check
 import api_key
 from claim_log import ClaimLog
@@ -361,6 +363,84 @@ def check_statement(req: StatementRequest):
     return statements.check(req.statement, req.kind, req.keys, req.label)
 
 
+meetings = Meetings(paths.data("meetings.json"))
+
+
+@app.get("/meetings")
+def list_meetings(project: str = "all"):
+    return meetings.all(library_project(project))
+
+
+@app.post("/meetings")
+def save_meeting(meeting: dict):
+    return meetings.save(meeting)
+
+
+@app.delete("/meetings")
+def delete_meeting(id: str):
+    return {"ok": meetings.delete(id)}
+
+
+@app.get("/meetings/workspace")
+def meeting_workspace(project: str):
+    return {"folder": meetings.workspaces.get(project, "")}
+
+
+@app.post("/meetings/workspace")
+def set_meeting_workspace(body: dict):
+    # Links a project to its shared workspace: its notes/ files are then kept up to date there.
+    return meetings.set_workspace(body.get("project", ""), body.get("folder", ""))
+
+
+@app.get("/meetings/export", response_class=PlainTextResponse)
+def export_meetings(project: str = "all", format: str = "markdown"):
+    # A project's meeting log to share: Markdown for Teams or a document, LaTeX for Overleaf.
+    return meetings.export(library_project(project), format)
+
+
+ai_log = AILog(paths.data("ai-log.json"))
+
+
+def referee_checks(project):
+    # How many claims Referee checked in this project, for the declaration.
+    return sum(1 for c in claim_log.claims() if project is None or (c.get("project") or "") == project)
+
+
+@app.get("/ai-log")
+def list_ai_use(project: str = "all"):
+    return ai_log.all(library_project(project))
+
+
+@app.post("/ai-log")
+def save_ai_use(entry: dict):
+    return ai_log.save(entry)
+
+
+@app.delete("/ai-log")
+def delete_ai_use(id: str):
+    return {"ok": ai_log.delete(id)}
+
+
+@app.get("/ai-log/declaration")
+def ai_declaration(project: str = "all"):
+    chosen = library_project(project)
+    return {"text": ai_log.declaration(chosen, referee_checks(chosen)), **ai_log.template(chosen)}
+
+
+@app.post("/ai-log/template")
+def set_ai_template(body: dict):
+    # A project's declaration wording: a preset ("standard", "paragraph") or custom text with
+    # {tools}, {system}, {purposes} and {checks} filled in from the log.
+    return ai_log.set_template(library_project(body.get("project", "all")), body.get("preset", "standard"),
+                               body.get("used", ""), body.get("unused", ""))
+
+
+@app.get("/ai-log/export", response_class=PlainTextResponse)
+def export_ai_use(project: str = "all", format: str = "markdown"):
+    chosen = library_project(project)
+    return ai_log.export(chosen, format, referee_checks(chosen))
+
+
 @app.post("/claims/current")
 def current_claims(req: CurrentRequest):
     # Keeps reports to what's written now: drafts and deleted sentences leave the claim log.
@@ -506,6 +586,8 @@ def rename_project_route(req: RenameRequest):
     new = req.new.strip()
     rename_project(req.old, new or None)
     claim_log.rename_project(req.old, new or None)
+    meetings.rename_project(req.old, new or None)
+    ai_log.rename_project(req.old, new or None)
     return reading.rename(req.old, new)
 
 

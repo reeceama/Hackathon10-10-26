@@ -1,8 +1,10 @@
 """The programming side of a piece of writing: the code folder chosen in Referee's settings.
 
 Two checks against the LaTeX being written:
-    software: libraries the code imports that ask to be cited (GUDHI, Ripser, scikit-learn...)
-              but that the writing never cites, each with its BibTeX entry.
+    software: libraries the code imports that ask to be cited (GUDHI, Ripser, scikit-learn...;
+              in R, R itself and packages such as ggplot2, MASS and lme4; in C and C++, libraries
+              such as Eigen, GSL, FFTW, CGAL and PHAT) but that the writing
+              never cites, each with its BibTeX entry.
     numbers:  figures in the writing that are close to, but not the same as, a value in the
               code's results (CSV, JSON, notebook outputs): usually a result that changed when
               the code was re-run, or a typo. Figures nowhere near any result are left alone,
@@ -108,6 +110,151 @@ SOFTWARE = {
 }"""),
 }
 
+# R packages that ask to be cited, by package name, in the same form. R itself is cited whenever
+# the code is R: its year is the current one, as R's citation() gives for the installed version.
+SOFTWARE_R = {
+    "ggplot2": ("ggplot2", [], "wickham2016ggplot2", """@book{wickham2016ggplot2,
+  author = {Wickham, Hadley},
+  title = {ggplot2: Elegant Graphics for Data Analysis},
+  publisher = {Springer-Verlag New York},
+  year = {2016},
+  isbn = {978-3-319-24277-4}
+}"""),
+    "MASS": ("MASS", [], "venables2002modern", """@book{venables2002modern,
+  author = {Venables, W. N. and Ripley, B. D.},
+  title = {Modern Applied Statistics with {S}},
+  edition = {Fourth},
+  publisher = {Springer},
+  address = {New York},
+  year = {2002}
+}"""),
+    "lme4": ("lme4", [], "bates2015lme4", """@article{bates2015lme4,
+  author = {Bates, Douglas and M{\\"a}chler, Martin and Bolker, Ben and Walker, Steve},
+  title = {Fitting Linear Mixed-Effects Models Using {lme4}},
+  journal = {Journal of Statistical Software},
+  volume = {67}, number = {1}, pages = {1--48}, year = {2015},
+  doi = {10.18637/jss.v067.i01}
+}"""),
+    "mgcv": ("mgcv", [], "wood2017generalized", """@book{wood2017generalized,
+  author = {Wood, S. N.},
+  title = {Generalized Additive Models: An Introduction with {R}},
+  edition = {2},
+  publisher = {Chapman and Hall/CRC},
+  year = {2017}
+}"""),
+    "car": ("car", [], "fox2019companion", """@book{fox2019companion,
+  author = {Fox, John and Weisberg, Sanford},
+  title = {An {R} Companion to Applied Regression},
+  edition = {Third},
+  publisher = {Sage},
+  address = {Thousand Oaks, CA},
+  year = {2019}
+}"""),
+    "glmnet": ("glmnet", [], "friedman2010regularization", """@article{friedman2010regularization,
+  author = {Friedman, Jerome and Hastie, Trevor and Tibshirani, Robert},
+  title = {Regularization Paths for Generalized Linear Models via Coordinate Descent},
+  journal = {Journal of Statistical Software},
+  volume = {33}, number = {1}, pages = {1--22}, year = {2010},
+  doi = {10.18637/jss.v033.i01}
+}"""),
+    "tidyverse": ("tidyverse", ["dplyr", "tidyr", "readr", "purrr", "tibble", "stringr", "forcats"], "wickham2019welcome", """@article{wickham2019welcome,
+  author = {Wickham, Hadley and Averick, Mara and Bryan, Jennifer and others},
+  title = {Welcome to the {tidyverse}},
+  journal = {Journal of Open Source Software},
+  volume = {4}, number = {43}, pages = {1686}, year = {2019},
+  doi = {10.21105/joss.01686}
+}"""),
+}
+for part in SOFTWARE_R["tidyverse"][1]:  # the tidyverse's own packages are cited through it
+    SOFTWARE_R[part] = SOFTWARE_R["tidyverse"]
+
+
+def r_itself() -> Tuple[str, List[str], str, str]:
+
+    year = datetime.now().year
+    return ("R", ["R Core Team"], f"rcore{year}", f"""@manual{{rcore{year},
+  author = {{{{R Core Team}}}},
+  title = {{R: A Language and Environment for Statistical Computing}},
+  organization = {{R Foundation for Statistical Computing}},
+  address = {{Vienna, Austria}},
+  year = {{{year}}},
+  url = {{https://www.R-project.org/}}
+}}""")
+
+
+# C and C++ libraries that ask to be cited, by the first part of their #include path.
+SOFTWARE_C = {
+    "eigen": ("Eigen", [], "eigenweb", """@misc{eigenweb,
+  author = {Guennebaud, Ga{\\"e}l and Jacob, Beno{\\^i}t and others},
+  title = {Eigen v3},
+  howpublished = {http://eigen.tuxfamily.org},
+  year = {2010}
+}"""),
+    "gsl": ("GSL", ["GNU Scientific Library"], "galassi2009gsl", """@book{galassi2009gsl,
+  author = {Galassi, M. and Davies, J. and Theiler, J. and Gough, B. and Jungman, G. and Alken, P. and Booth, M. and Rossi, F.},
+  title = {{GNU} Scientific Library Reference Manual},
+  edition = {Third},
+  publisher = {Network Theory Ltd},
+  year = {2009}
+}"""),
+    "fftw3": ("FFTW", [], "frigo2005fftw", """@article{frigo2005fftw,
+  author = {Frigo, Matteo and Johnson, Steven G.},
+  title = {The Design and Implementation of {FFTW3}},
+  journal = {Proceedings of the IEEE},
+  volume = {93}, number = {2}, pages = {216--231}, year = {2005},
+  doi = {10.1109/JPROC.2004.840301}
+}"""),
+    "gmp": ("GMP", ["GNU MP"], "gmp", """@manual{gmp,
+  author = {Granlund, Torbj{\\"o}rn and {the GMP development team}},
+  title = {{GNU MP}: The {GNU} Multiple Precision Arithmetic Library},
+  url = {https://gmplib.org/}
+}"""),
+    "armadillo": ("Armadillo", [], "sanderson2016armadillo", """@article{sanderson2016armadillo,
+  author = {Sanderson, Conrad and Curtin, Ryan},
+  title = {Armadillo: a template-based {C++} library for linear algebra},
+  journal = {Journal of Open Source Software},
+  volume = {1}, number = {2}, pages = {26}, year = {2016},
+  doi = {10.21105/joss.00026}
+}"""),
+    "cgal": ("CGAL", [], "cgal", """@manual{cgal,
+  author = {{The CGAL Project}},
+  title = {{CGAL} User and Reference Manual},
+  organization = {CGAL Editorial Board},
+  url = {https://doc.cgal.org}
+}"""),
+    "phat": ("PHAT", [], "bauer2017phat", """@article{bauer2017phat,
+  author = {Bauer, Ulrich and Kerber, Michael and Reininghaus, Jan and Wagner, Hubert},
+  title = {Phat -- Persistent Homology Algorithms Toolbox},
+  journal = {Journal of Symbolic Computation},
+  volume = {78}, pages = {76--90}, year = {2017},
+  doi = {10.1016/j.jsc.2016.03.009}
+}"""),
+    "ripser": ("Ripser", [], "bauer2021ripser", """@article{bauer2021ripser,
+  author = {Bauer, Ulrich},
+  title = {Ripser: efficient computation of {V}ietoris--{R}ips persistence barcodes},
+  journal = {Journal of Applied and Computational Topology},
+  volume = {5}, pages = {391--423}, year = {2021},
+  doi = {10.1007/s41468-021-00071-5}
+}"""),
+    "gudhi": SOFTWARE["gudhi"],
+}
+C_INCLUDE = re.compile(r"^\s*#\s*include\s*[<\"]([^>\"]+)[>\"]", re.MULTILINE)
+C_FILES = {".c", ".h", ".cpp", ".cc", ".cxx", ".hpp", ".hh", ".hxx"}
+
+
+def c_library(include: str) -> Optional[str]:
+
+    """
+    "Eigen/Dense" -> "eigen", "gsl/gsl_rng.h" -> "gsl", "fftw3.h" -> "fftw3", "gmpxx.h" -> "gmp".
+    """
+
+    first = include.split("/")[0].lower()
+    first = re.sub(r"\.(h|hpp|hh)$", "", first)
+    first = {"gmpxx": "gmp", "ripser.cpp": "ripser"}.get(first, first)
+    return first if first in SOFTWARE_C else None
+
+
+R_IMPORT = re.compile(r"(?:library|require|requireNamespace)\(\s*[\"']?([A-Za-z][\w.]*)|\b([A-Za-z][\w.]*)::")
 IMPORT = re.compile(r"^\s*(?:import|from)\s+([A-Za-z_]\w*)", re.MULTILINE)
 NUMBER = re.compile(r"-?\d+\.\d+(?:[eE][-+]?\d+)?|-?\d+[eE][-+]?\d+")
 CITE = re.compile(r"\\(?:cite|citep|citet|parencite|textcite|autocite)\w*\*?(?:\[[^\]]*\]){0,2}\{([^}]*)\}")
@@ -129,7 +276,7 @@ def _files(root: Path) -> Iterator[Path]:
         folders[:] = [f for f in folders if f not in SKIP_FOLDERS and not f.startswith(".")]
         for name in names:
             path = Path(directory) / name
-            if path.suffix.lower() in {".py", ".ipynb", ".csv", ".tsv", ".json", ".txt"}:
+            if path.suffix.lower() in {".py", ".ipynb", ".r", ".rmd", ".qmd", ".csv", ".tsv", ".json", ".txt", *C_FILES}:
                 try:
                     if path.stat().st_size > MAX_BYTES:
                         continue
@@ -171,6 +318,9 @@ class Scan:
 
         self.seen: Dict[str, float] = {}
         self.imports: Dict[str, str] = {}               # import name -> first file using it
+        self.r_packages: Dict[str, str] = {}            # R package -> first file using it
+        self.r_file: Optional[str] = None               # an R file, if the code is R
+        self.c_libraries: Dict[str, str] = {}           # C/C++ library -> first file including it
         self.values: List[Tuple[float, str, float]] = []  # (value, file, modified)
 
     def update(self, root: Path) -> None:
@@ -179,7 +329,7 @@ class Scan:
         stamps = {str(f): f.stat().st_mtime for f in files}
         if stamps == self.seen:
             return
-        self.seen, self.imports, self.values = stamps, {}, []
+        self.seen, self.imports, self.values, self.r_packages, self.r_file, self.c_libraries = stamps, {}, [], {}, None, {}
         for path in files:
             relative, modified = str(path.relative_to(root)), stamps[str(path)]
             suffix = path.suffix.lower()
@@ -188,6 +338,15 @@ class Scan:
                     code, outputs = _notebook(path)
                     self._imports(code, relative)
                     self._numbers(outputs, relative, modified)
+                elif suffix in {".r", ".rmd", ".qmd"}:
+                    self.r_file = self.r_file or relative
+                    for match in R_IMPORT.finditer(path.read_text(encoding="utf-8", errors="ignore")):
+                        self.r_packages.setdefault(match.group(1) or match.group(2), relative)
+                elif suffix in C_FILES:
+                    for include in C_INCLUDE.findall(path.read_text(encoding="utf-8", errors="ignore")):
+                        library = c_library(include)
+                        if library:
+                            self.c_libraries.setdefault(library, relative)
                 elif suffix == ".py":
                     self._imports(path.read_text(encoding="utf-8", errors="ignore"), relative)
                 elif suffix in {".csv", ".tsv"}:
@@ -246,14 +405,20 @@ def software(latex: str) -> List[Dict]:
     """
 
     keys = {k.strip() for found in CITE.findall(latex) for k in found.split(",")}
-    missing = []
-    for module, file in sorted(scan.imports.items()):
-        if module not in SOFTWARE:
+    used = [(SOFTWARE[m], f) for m, f in sorted(scan.imports.items()) if m in SOFTWARE]
+    used += [(SOFTWARE_R[p], f) for p, f in sorted(scan.r_packages.items()) if p in SOFTWARE_R]
+    used += [(SOFTWARE_C[c], f) for c, f in sorted(scan.c_libraries.items())]
+    if scan.r_file:
+        used.insert(0, (r_itself(), scan.r_file))
+    missing, listed = [], set()
+    for (name, others, key, entry), file in used:
+        if key in listed:  # several tidyverse packages share one citation
             continue
-        name, others, key, entry = SOFTWARE[module]
-        names = [n.lower() for n in [name, *others]]
-        # Cited by its key, or by a \cite shortly after its name ("GUDHI~\cite{...}", "Ripser [\cite{...}]").
-        near = [re.compile(re.escape(n) + r"[^.;]{0,40}?\\(?:cite|citep|citet|parencite|textcite|autocite)", re.IGNORECASE) for n in names]
+        listed.add(key)
+        # Cited by its key, or by a \cite shortly after its name ("GUDHI~\cite{...}"). Short names
+        # like "R" must match as whole words, in their own case.
+        near = [re.compile(r"(?<![\w-])" + re.escape(n) + r"(?![\w-])[^.;]{0,40}?\\(?:cite|citep|citet|parencite|textcite|autocite)",
+                           re.IGNORECASE if len(n) > 2 else 0) for n in [name, *others]]
         cited = key in keys or any(pattern.search(latex) for pattern in near)
         if not cited:
             missing.append({"name": name, "file": file, "key": key, "bibtex": entry})
@@ -270,7 +435,7 @@ def numbers(latex: str) -> List[Dict]:
         return []
     body = _body(latex)
     flagged = []
-    figure = re.compile(r"(?<![\w.\\])(\d+\.\d+)(\\?%)?(?![\w.])")
+    figure = re.compile(r"(?<![\w.\\])(\d+\.\d+)(\\?%)?(?!\w|\.\d)")  # a full stop after it ends the sentence
     for match in figure.finditer(body):
         before = body[max(0, match.start() - 12):match.start()]
         if re.search(r"(Theorem|Lemma|Section|Chapter|Figure|Fig\.|Table|Eq\.|Definition|Proposition|version|v)\W*$", before, re.IGNORECASE):

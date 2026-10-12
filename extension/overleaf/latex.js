@@ -77,6 +77,44 @@ const Latex = (() => {
         }
       }
     }
+    // The same symbol introduced again: check it still means the same thing.
+    const seen = new Map();
+    for (const m of hidden.matchAll(/\b(?:[Ll]et|denote(?:d)? by|[Dd]efine)\s+\$([^$]+?)\$/g)) {
+      const symbol = m[1].split(/\s*(?:=|:=|\\coloneqq|\\in|\\subset(?:eq)?|\\colon|:|\\to|\\geq?|\\leq?|>|<|,)\s*/)[0].trim();
+      if (!symbol || symbol.length > 20) continue;
+      if (seen.has(symbol)) issues.push({ line: lineAt(text, m.index), message: `$${symbol}$ is introduced again here (first on line ${seen.get(symbol)}). Check it means the same thing, or use a different symbol.` });
+      else seen.set(symbol, lineAt(text, m.index));
+    }
+
+    // Results used without being stated and cited, and steps asserted rather than justified.
+    const body = clean.replace(/\\begin\{(equation|align|gather)\*?\}[\s\S]*?\\end\{\1\*?\}/g, (m) => " ".repeat(m.length));
+    const VAGUE = /\b(?:from (?:the )?lectures?|(?:a |the )?(?:well[- ]known|standard) (?:theorem|result|fact)|by a (?:theorem|result)|it (?:is|can be) (?:known|shown) that)\b/gi;
+    const ASSERTED = /\b(?:clearly|obviously|trivially|it is (?:easy|straightforward) to (?:see|show|check))\b/gi;
+    const sentenceAt = (index) => {
+      const start = Math.max(body.lastIndexOf(".", index), body.lastIndexOf("\n\n", index));
+      const end = body.indexOf(".", index);
+      return body.slice(start + 1, end < 0 ? body.length : end);
+    };
+    const flagged = new Set();  // one warning per sentence
+    for (const m of body.matchAll(VAGUE)) {
+      const sentence = sentenceAt(m.index);
+      if (/\\cite/.test(sentence) || flagged.has(sentence)) continue;
+      flagged.add(sentence);
+      issues.push({ line: lineAt(text, m.index), message: `“${m[0]}”: state the result precisely, with its hypotheses, and cite where it comes from.` });
+    }
+    for (const m of body.matchAll(ASSERTED)) {
+      issues.push({ line: lineAt(text, m.index), message: `“${m[0]}”: a marker may want this step justified rather than asserted.` });
+    }
+
+    // An "if and only if" result whose proof never mentions the other direction.
+    const names = [...resultNames(clean).keys()].join("|");
+    const iff = new RegExp(`\\\\begin\\{(${names})\\*?\\}[\\s\\S]*?\\\\end\\{\\1\\*?\\}\\s*\\\\begin\\{proof\\}([\\s\\S]*?)\\\\end\\{proof\\}`, "g");
+    for (const m of clean.matchAll(iff)) {
+      if (!/if and only if|\biff\b|\\iff|\\Leftrightarrow|\\leftrightarrow/.test(m[0].slice(0, m[0].indexOf("\\begin{proof}")))) continue;
+      if (/\\Leftarrow|\\impliedby|\\Longleftarrow|[Cc]onversely|converse|other direction|\(\s*\\?(?:Leftarrow|⇐)|both directions/.test(m[2])) continue;
+      issues.push({ line: lineAt(text, m.index), message: "This result says “if and only if”, but its proof doesn't seem to show the converse. Prove both directions." });
+    }
+
     return issues.sort((a, b) => a.line - b.line);
   }
 
