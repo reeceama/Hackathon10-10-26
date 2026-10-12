@@ -9,6 +9,8 @@ let server = URL(string: "http://localhost:8000")!
 @MainActor
 final class Model: ObservableObject {
 
+    static let shared = Model()
+
     @Published var online = false
     @Published var focus = false
     @Published var writing = false
@@ -206,6 +208,12 @@ enum WordSettings {
         set { config["auto_cite"] = newValue }
     }
 
+    /// Whether the Overleaf panel inserts supported citations itself, or offers an Insert button (the default).
+    static var overleafAutoCite: Bool {
+        get { config["overleaf_auto_cite"] as? Bool ?? false }
+        set { config["overleaf_auto_cite"] = newValue }
+    }
+
     /// How the Word helper marks the sentences it checks: "underline", "highlight" or "none"
     /// (citations and comments are added either way).
     static var marks: String {
@@ -312,13 +320,6 @@ struct MenuContent: View {
             .labelsHidden()
             Divider()
             Button("New Project…") { show("new-project") }
-        }
-        Menu("Citation Style in Word") {
-            Picker("Style", selection: Binding(get: { model.style }, set: { model.setStyle($0) })) {
-                ForEach(styles, id: \.0) { Text($0.1).tag($0.0) }
-            }
-            .pickerStyle(.inline)
-            .labelsHidden()
         }
         Menu("Keep Unsaved Reading For") {
             Picker("Keep", selection: Binding(get: { model.keepMinutes }, set: { model.setKeep($0) })) {
@@ -503,6 +504,8 @@ struct SettingsView: View {
     @State private var marks = WordSettings.marks
     @State private var codeFolder = WordSettings.codeFolder
     @State private var autoCite = WordSettings.autoCite
+    @State private var overleafAutoCite = WordSettings.overleafAutoCite
+    @AppStorage("settingsWritingIn") private var writingIn = "word"
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -560,57 +563,83 @@ struct SettingsView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
-            card(title: "Word", symbol: "doc.text") {
-                row("Citation style") {
-                    Menu {
-                        Picker("Style", selection: Binding(get: { model.style }, set: { model.setStyle($0) })) {
-                            ForEach(styles, id: \.0) { Text($0.1).tag($0.0) }
+            card(title: "Writing", symbol: "doc.text") {
+                Picker("Writing in", selection: $writingIn) {
+                    Text("Word").tag("word")
+                    Text("Overleaf").tag("overleaf")
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                if writingIn == "word" {
+                    row("Citation style") {
+                        Menu {
+                            Picker("Style", selection: Binding(get: { model.style }, set: { model.setStyle($0) })) {
+                                ForEach(styles, id: \.0) { Text($0.1).tag($0.0) }
+                            }
+                            .pickerStyle(.inline)
+                            .labelsHidden()
+                        } label: {
+                            Text(styles.first { $0.0 == model.style }?.1 ?? "APA 7")
                         }
-                        .pickerStyle(.inline)
-                        .labelsHidden()
-                    } label: {
-                        Text(styles.first { $0.0 == model.style }?.1 ?? "APA 7")
+                        .fixedSize()
+                        .glassButton()
                     }
-                    .fixedSize()
-                    .glassButton()
-                }
-                Divider().opacity(0.4)
-                row("Mark sentences with") {
-                    Picker("Mark sentences with", selection: Binding(get: { marks }, set: { marks = $0; WordSettings.marks = $0 })) {
-                        Text("Underline").tag("underline")
-                        Text("Highlight").tag("highlight")
-                        Text("Nothing").tag("none")
-                    }
-                    .labelsHidden()
-                    .fixedSize()
-                }
-                Divider().opacity(0.4)
-                row("Add citations automatically") {
-                    Toggle("Add citations automatically", isOn: Binding(get: { autoCite }, set: { autoCite = $0; WordSettings.autoCite = $0 }))
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-                Text("Green: supported. Amber: check the wording. Red: contradicted. Underlines show clearly in dark mode, where Word dims highlights. With automatic citations off, a comment suggests each citation for you to type, so you choose every one.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            card(title: "Code", symbol: "chevron.left.forwardslash.chevron.right") {
-                row("Code folder") {
-                    HStack(spacing: 6) {
-                        if !codeFolder.isEmpty {
-                            Text(URL(fileURLWithPath: codeFolder).lastPathComponent)
-                                .foregroundStyle(.secondary)
-                                .help(codeFolder)
-                            Button("Clear") { codeFolder = ""; WordSettings.codeFolder = "" }.glassButton()
+                    Divider().opacity(0.4)
+                    row("Mark sentences with") {
+                        Picker("Mark sentences with", selection: Binding(get: { marks }, set: { marks = $0; WordSettings.marks = $0 })) {
+                            Text("Underline").tag("underline")
+                            Text("Highlight").tag("highlight")
+                            Text("Nothing").tag("none")
                         }
-                        Button(codeFolder.isEmpty ? "Choose…" : "Change…", action: chooseCodeFolder).glassButton()
+                        .labelsHidden()
+                        .fixedSize()
                     }
+                    Divider().opacity(0.4)
+                    row("Add citations automatically") {
+                        Toggle("Add citations automatically", isOn: Binding(get: { autoCite }, set: { autoCite = $0; WordSettings.autoCite = $0 }))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                    Text("Green: supported. Amber: check the wording. Red: contradicted. Underlines show clearly in dark mode, where Word dims highlights. With automatic citations off, a comment suggests each citation for you to type, so you choose every one.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+            
+                } else {
+                    row("Citation style") {
+                        Text("Set in your document").foregroundStyle(.secondary)
+                    }
+                    Text("LaTeX formats citations itself, using \\bibliographystyle in your document: amsplain for AMS. Referee suggests \\cite keys that match its BibTeX export.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider().opacity(0.4)
+                    row("Add citations automatically") {
+                        Toggle("Add citations automatically", isOn: Binding(get: { overleafAutoCite }, set: { overleafAutoCite = $0; WordSettings.overleafAutoCite = $0 }))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                    Text("Off: each suggested \\cite has an Insert button in the Referee panel, so you choose every one. On: they're added for you, except in the sentence you're editing.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Divider().opacity(0.4)
+                    row("Code folder") {
+                        HStack(spacing: 6) {
+                            if !codeFolder.isEmpty {
+                                Text(URL(fileURLWithPath: codeFolder).lastPathComponent)
+                                    .foregroundStyle(.secondary)
+                                    .help(codeFolder)
+                                Button("Clear") { codeFolder = ""; WordSettings.codeFolder = "" }.glassButton()
+                            }
+                            Button(codeFolder.isEmpty ? "Choose…" : "Change…", action: chooseCodeFolder).glassButton()
+                        }
+                    }
+                    Text("The code and results behind your writing. Referee lists libraries your code uses that should be cited, and figures in your writing that don't match your latest results.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                Text("The code and results behind your writing. In Overleaf, Referee lists libraries your code uses that should be cited, and figures in your writing that don't match your latest results.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
             card(title: "Anthropic", symbol: "key") {
                 ApiKeyView(model: model)
@@ -632,7 +661,7 @@ struct SettingsView: View {
                         .labelsHidden()
                 }
                 if !showInMenuBar {
-                    Text("Referee keeps working in the background. Open it from Applications or Spotlight to get back here.")
+                    Text("Referee keeps working in the background. Open it from Applications or Spotlight to get back here, and the Library from the button at the top.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -648,6 +677,7 @@ struct SettingsView: View {
                 .frame(width: 26, height: 26)
             Text("Referee").font(.title2.weight(.semibold))
             Spacer()
+            Button("Open Library") { Windows.open("library") }.glassButton()
             HStack(spacing: 6) {
                 Circle().fill(model.online ? (model.capturing ? Color.green : Color.secondary) : Color.orange)
                     .frame(width: 7, height: 7)
@@ -817,24 +847,47 @@ struct WindowGlass: NSViewRepresentable {
 /// The repository this app was built from: its Python parts and the extension folder.
 let repository = URL(fileURLWithPath: Bundle.main.object(forInfoDictionaryKey: "RefereeRepository") as? String ?? "")
 
-/// Hands the app delegate a way to open the settings window. It lives in the menu bar label
-/// because SwiftUI only gives window-opening to views, and the label always exists.
-struct SettingsOpener: View {
+/// Opens Referee's windows by id, from anywhere. SwiftUI only lets views open windows, so any
+/// view that appears (the menu bar icon, or any window) hands over its opener. With none yet, as
+/// when the menu bar icon is hidden and no window is open, the window is made directly.
+@MainActor enum Windows {
+
+    static var opener: ((String) -> Void)?
+    private static var made: [String: NSWindow] = [:]
+
+    static func open(_ id: String) {
+        NSApp.activate(ignoringOtherApps: true)
+        if let opener {
+            opener(id)
+            return
+        }
+        if let window = made[id] {
+            window.makeKeyAndOrderFront(nil)
+            return
+        }
+        let view = id == "library" ? AnyView(LibraryView()) : AnyView(SettingsView(model: .shared))
+        let window = NSWindow(contentViewController: NSHostingController(rootView: view))
+        window.styleMask.insert(.fullSizeContentView)
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isReleasedWhenClosed = false
+        window.center()
+        made[id] = window
+        window.makeKeyAndOrderFront(nil)
+    }
+}
+
+/// Hands Windows a SwiftUI window opener. Put on the menu bar icon and on every window.
+struct WindowOpener: View {
 
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Color.clear.frame(width: 0, height: 0).onAppear {
-            openSettings = {
-                openWindow(id: "settings")
-                NSApp.activate(ignoringOtherApps: true)
-            }
+            Windows.opener = { id in openWindow(id: id) }
         }
     }
 }
-
-/// Opens the settings window; set by the menu bar label, which SwiftUI keeps alive.
-@MainActor var openSettings: (() -> Void)?
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
 
@@ -852,19 +905,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         services?.startAll()
         Updater.shared.start()
         Shortcut.shared.start()
-        if !openedAtLogin { showSettingsWhenReady(attempts: 20) }
+        if !openedAtLogin { showSettingsWhenReady(attempts: 8) }
     }
 
-    /// The menu bar label sets up openSettings shortly after launch; wait for it.
+    /// The menu bar icon hands over SwiftUI's window opener shortly after launch; wait briefly for
+    /// it, then open settings either way (directly, if the icon is hidden).
     private func showSettingsWhenReady(attempts: Int) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            if let open = openSettings { open() } else if attempts > 0 { self.showSettingsWhenReady(attempts: attempts - 1) }
+            if Windows.opener != nil || attempts == 0 { Windows.open("settings") } else { self.showSettingsWhenReady(attempts: attempts - 1) }
         }
     }
 
     // Clicking the app's icon again (in Applications, Spotlight or Launchpad) opens settings.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        openSettings?()
+        Windows.open("settings")
         return true
     }
 
@@ -877,7 +931,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct RefereeApp: App {
 
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    @StateObject private var model = Model()
+    @ObservedObject private var model = Model.shared
     @AppStorage("showInMenuBar") private var showInMenuBar = true
     let repo = repository
 
@@ -887,25 +941,25 @@ struct RefereeApp: App {
         } label: {
             // The whistle: filled while capturing, an outline when idle.
             Image(nsImage: icon(model.capturing ? "whistleOnTemplate" : "whistleOffTemplate"))
-                .background(SettingsOpener())
+                .background(WindowOpener())
             if !model.online { Text("⚠︎") }
         }
         Window("Library", id: "library") {
-            LibraryView()
+            LibraryView().background(WindowOpener())
         }
         .windowStyle(.hiddenTitleBar)
         Window("Add Source", id: "add-source") {
-            AddSourceView(model: model)
+            AddSourceView(model: model).background(WindowOpener())
         }
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
         Window("New Project", id: "new-project") {
-            NewProjectView(model: model)
+            NewProjectView(model: model).background(WindowOpener())
         }
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)
         Window("Referee Settings", id: "settings") {
-            SettingsView(model: model)
+            SettingsView(model: model).background(WindowOpener())
         }
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)

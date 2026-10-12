@@ -202,13 +202,13 @@ class Helper:
 
     def step(self) -> None:
 
-        if not self.word.available():
-            self.last_text = None
-            return
-        # Let the app know the helper is running.
+        # Let the app know the helper is running, whether or not Word is open.
         if time.time() - self.last_heartbeat > PING_SECONDS / 2:
             self.last_heartbeat = time.time()
             self.post("/helper", {})
+        if not self.word.available():
+            self.last_text = None
+            return
 
         document = self.word.document()
         if document is None:
@@ -348,6 +348,9 @@ class Helper:
         state["checked"] = sorted(checked)
         self.update_references(state, settings["style"])
         self.report_warnings(name, state)
+        document = self.word.document()
+        if document is not None:  # reworded or deleted sentences leave the reports
+            self.post("/claims/current", {"document": Path(name).name, "text": writing_part(document[1])})
         self.state.save()
         document = self.word.document()
         self.last_text = document[1] if document else None  # our own edits aren't typing

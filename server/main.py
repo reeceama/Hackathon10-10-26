@@ -69,7 +69,7 @@ class WritingSession:
 
     ACTIVE_FOR = 5 * 60  # seconds after the last ping
 
-    HELPER_FOR = 2 * 60  # the Word helper sends a heartbeat every 30 seconds while Word is open
+    HELPER_FOR = 2 * 60  # the Word helper sends a heartbeat every 30 seconds while it runs
 
     def __init__(self):
 
@@ -152,6 +152,12 @@ class StatementRequest(BaseModel):
     kind: str = "theorem"
     keys: list = []    # the citation keys it cites
     label: str = ""    # its optional title, e.g. "Bobrowski and Skraba, Conjecture 1"
+
+
+class CurrentRequest(BaseModel):
+    document: str = ""
+    text: str = ""         # the whole document (Word): claims not in it are dropped
+    removed: list = []     # sentences rewritten or deleted (Overleaf)
 
 
 class CodeRequest(BaseModel):
@@ -355,6 +361,15 @@ def check_statement(req: StatementRequest):
     return statements.check(req.statement, req.kind, req.keys, req.label)
 
 
+@app.post("/claims/current")
+def current_claims(req: CurrentRequest):
+    # Keeps reports to what's written now: drafts and deleted sentences leave the claim log.
+    dropped = claim_log.forget_sentences(req.removed)
+    if req.text and req.document:
+        dropped += claim_log.keep_present(req.document, req.text)
+    return {"ok": True, "dropped": dropped}
+
+
 @app.post("/code")
 def check_code(req: CodeRequest):
     # The writing against the code folder chosen in settings: uncited libraries, stale figures.
@@ -496,7 +511,12 @@ def rename_project_route(req: RenameRequest):
 
 @app.get("/settings")
 def get_settings():
-    return reading.as_dict()
+    # Plus the Overleaf panel's settings, chosen in Referee's Settings (~/.referee/config.json).
+    try:
+        config = json.loads((Path.home() / ".referee" / "config.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        config = {}
+    return {**reading.as_dict(), "overleaf_auto_cite": bool(config.get("overleaf_auto_cite", False))}
 
 
 @app.post("/settings")

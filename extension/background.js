@@ -6,7 +6,7 @@ importScripts("skip.js");
 
 const SERVER = "http://localhost:8000";
 const HEADERS = { "Content-Type": "application/json", "X-Referee": "1" };
-const ROUTES = ["check", "feedback", "statement", "code"];
+const ROUTES = ["check", "feedback", "statement", "code", "claims/current"];
 const MAX_LOG = 50;
 
 chrome.runtime.onMessage.addListener((message, sender, reply) => {
@@ -77,6 +77,13 @@ chrome.runtime.onMessage.addListener((message, sender, reply) => {
       .then((response) => response.json())
       .then(reply)
       .catch((error) => reply({ error: String(error) }));
+    return true;
+  }
+  if (message.type === "page") {  // the library opens a report or exports a file: text, not JSON
+    fetch(`${SERVER}/${message.path}`, { headers: HEADERS, cache: "no-store" })
+      .then((response) => response.text())
+      .then(reply)
+      .catch(() => reply(null));
     return true;
   }
   if (message.type === "setResearch") {

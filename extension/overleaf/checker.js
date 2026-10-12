@@ -73,6 +73,8 @@
   }              // the saved sources last time, to notice new or re-read ones
 
   async function loadKeys() {
+    const settings = await ask({ type: "get", path: "settings" });  // Auto-cite is set in Referee's Settings
+    autoCite = Boolean(settings?.overleaf_auto_cite);
     const sources = await ask({ type: "get", path: "sources" });
     if (!Array.isArray(sources)) return;
     keysByUrl = Object.fromEntries(sources.map((s) => [s.url, s.cite_key]));
@@ -85,8 +87,20 @@
     library = now;
   }
 
+  let previous = "";              // the text last checked, to tell an edit from opening another file
+
+  function sameFile(before, after) {
+    const lines = (text) => new Set(text.split("\n").map((l) => l.trim()).filter((l) => l.length > 3));
+    const a = lines(before), b = lines(after);
+    return a.size > 0 && [...a].filter((l) => b.has(l)).length >= a.size / 2;
+  }
+
+  // A reference file (refs.bib) open in the editor: its entries aren't writing to check.
+  const isBib = (text) => !/\\begin\{document\}|\\section|\\documentclass/.test(text) && /^\s*@\w+\s*\{/m.test(text);
+
   async function checkAll() {
     if (running) { timer = setTimeout(checkAll, PAUSE); return; }
+    if (isBib(latest)) return;
     running = true;
     code = await ask({ type: "code", body: { text: latest } });  // no AI: quick, so run every time
     const found = Latex.sentences(latest);
@@ -112,7 +126,12 @@
     }
     // Forget sentences that are no longer in the file, so the panel matches what's written.
     const present = new Set(found.map((f) => f.sentence));
-    for (const sentence of Object.keys(results)) if (!present.has(sentence)) delete results[sentence];
+    const removed = Object.keys(results).filter((sentence) => !present.has(sentence));
+    // Mostly the same lines as last time: this file was edited, so the missing sentences were
+    // reworded or deleted, and leave the reports. Mostly different: another file was opened.
+    if (removed.length && sameFile(previous, latest)) await ask({ type: "claims/current", body: { removed } });
+    previous = latest;
+    for (const sentence of removed) delete results[sentence];
     for (const { sentence, keys } of found) if (results[sentence]) results[sentence].keys = keys;
     if (alive()) chrome.storage.local.set({ [memory]: { results, compared, library } }).catch(() => {});
     running = false;
@@ -182,7 +201,6 @@
     .box { color-scheme: light dark; position: fixed; right: 16px; bottom: 16px; z-index: 2147483647; width: 340px; max-height: 50vh; display: flex; flex-direction: column;
       font: 13px -apple-system, system-ui, sans-serif; color: #1d1d1f; background: #fff; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
     header { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; font-weight: 600; cursor: pointer; }
-    .auto { font-weight: 400; font-size: 12px; margin-left: auto; margin-right: 10px; display: flex; align-items: center; gap: 4px; }
     .hint { padding: 0 12px 8px; font-size: 12px; color: #8e8e93; }
     .closed .hint { display: none; }
     .list { overflow-y: auto; padding: 0 12px 10px; }
@@ -197,19 +215,13 @@
     button, a { font: inherit; font-size: 12px; margin-left: 4px; }
     code { font-size: 12px; background: #f2f2f7; padding: 1px 4px; border-radius: 4px; }
     @media (prefers-color-scheme: dark) { .box { background: #2c2c2e; color: #f5f5f7; } .item { border-color: #3a3a3c; } code { background: #3a3a3c; } a { color: #64d2ff; } }
-  </style><div class="box closed"><header><span>Referee</span><label class="auto" title="Add supported citations automatically, except in the sentence you're editing"><input type="checkbox"> Auto-cite</label><span class="count"></span></header><div class="hint" hidden>New citations show as “?” until refs.bib has them: export it from Referee's Library and upload it to Overleaf.</div><div class="list"></div></div>`;
+  </style><div class="box closed"><header><span>Referee</span><span class="count"></span></header><div class="hint" hidden>New citations show as “?” until refs.bib has them: export it from Referee's Library and upload it to Overleaf.</div><div class="list"></div></div>`;
   document.documentElement.append(host);
   const box = shadow.querySelector(".box");
   shadow.querySelector("header").addEventListener("click", (event) => {
     if (!event.target.closest(".auto")) box.classList.toggle("closed");
   });
-  const autoBox = shadow.querySelector(".auto input");
-  chrome.storage.local.get("overleafAutoCite", (saved) => { autoCite = autoBox.checked = Boolean(saved.overleafAutoCite); });
-  autoBox.addEventListener("change", () => {
-    autoCite = autoBox.checked;
-    if (alive()) chrome.storage.local.set({ overleafAutoCite: autoCite });
-    autoInsert();
-  });
+
 
   function heading(text) {
     const h = document.createElement("h3");

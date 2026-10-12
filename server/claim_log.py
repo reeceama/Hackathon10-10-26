@@ -2,13 +2,27 @@
 
 Every confident verdict from /check is recorded, whichever app the writing is in (Word,
 the browser), so the library can show which sources are cited and build the proof-of-work
-report. Only the latest verdict for each sentence is kept.
+report. Only the latest verdict for each sentence is kept, and only while the sentence is still in
+its document: reworded or deleted sentences are dropped, so reports list what's written now.
 """
 
 import json
+import re
 import time
 from pathlib import Path
 from typing import Dict, List, Optional
+
+BIBTEX = re.compile(r"^\s*@\w+\s*\{")  # a reference file's entry, read as if it were writing
+
+
+def _bare(text: str) -> str:
+
+    """
+    Letters and digits only, without citations, for finding a sentence in a document.
+    """
+
+    text = re.sub(r"\([^()]*\d{4}[^()]*\)|\[[\d,\s–-]+\]|~?\\cite\w*(\[[^\]]*\])*\{[^}]*\}", " ", text)
+    return re.sub(r"[^a-z0-9]", "", text.lower())
 
 
 class ClaimLog:
@@ -36,7 +50,7 @@ class ClaimLog:
         that needs a source, with the details the pre-submission report and research trail use.
         """
 
-        if verdict.get("label") not in ("supports", "contradicts", "misquote", "needs_source"):
+        if verdict.get("label") not in ("supports", "contradicts", "misquote", "needs_source") or BIBTEX.match(sentence):
             return
         self.entries[sentence] = {
             "sentence": sentence,
@@ -73,6 +87,29 @@ class ClaimLog:
             if entry.get("project") == old:
                 entry["project"] = new or None
         self.save()
+
+    def keep_present(self, document: str, text: str) -> int:
+
+        """
+        Drops a document's claims whose sentences are no longer in its text. Returns how many.
+        """
+
+        whole = _bare(text)
+        gone = [s for s, e in self.entries.items() if e.get("document") == document and _bare(s) not in whole]
+        return self.forget_sentences(gone)
+
+    def forget_sentences(self, sentences: List[str]) -> int:
+
+        """
+        Drops these sentences' claims (rewritten or deleted), and reference-file entries.
+        """
+
+        gone = [s for s in self.entries if s in set(sentences) or BIBTEX.match(s)]
+        for sentence in gone:
+            del self.entries[sentence]
+        if gone:
+            self.save()
+        return len(gone)
 
     def forget(self, url: str) -> None:
 

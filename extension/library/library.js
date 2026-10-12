@@ -344,6 +344,53 @@ projectSelect.onchange = () => {
 searchBox.oninput = renderSources;
 document.getElementById("proof").onclick = proofOfWork;
 
+// The other reports and Zotero files come from Referee's server, as in the Mac app's Library.
+function serverProject() {
+  if (!projectSelect.value) return "all";
+  return projectSelect.value === NO_PROJECT ? "none" : projectSelect.value;
+}
+
+async function serverPage(path) {
+  const text = await chrome.runtime.sendMessage({ type: "page", path });
+  if (text == null) alert("Referee isn't running. Open Referee and try again.");
+  return text;
+}
+
+async function openServerReport(page) {
+  const html = await serverPage(`${page}?project=${encodeURIComponent(serverProject())}`);
+  if (html != null) window.open(URL.createObjectURL(new Blob([html], { type: "text/html" })), "_blank");
+}
+
+document.getElementById("presubmission").onclick = () => openServerReport("presubmission");
+document.getElementById("trail").onclick = () => openServerReport("trail");
+
+document.getElementById("export").onclick = async () => {
+  const bib = await serverPage(`export?format=bibtex&project=${encodeURIComponent(serverProject())}`);
+  if (bib == null) return;
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([bib], { type: "application/x-bibtex" }));
+  link.download = "refs.bib";
+  link.click();
+};
+
+const importFile = document.getElementById("import-file");
+document.getElementById("import").onclick = () => importFile.click();
+importFile.onchange = async () => {
+  const file = importFile.files[0];
+  importFile.value = "";
+  if (!file) return;
+  const button = document.getElementById("import");
+  button.disabled = true;
+  button.textContent = "Importing…";
+  const result = await chrome.runtime.sendMessage({ type: "post", path: "import", body: { text: await file.text() } });
+  button.disabled = false;
+  button.textContent = "Import .bib or .ris";
+  if (!result || result.error) { alert("Referee isn't running. Open Referee and try again."); return; }
+  const failed = result.failed?.length ? `\n\nCouldn't add:\n${result.failed.join("\n")}` : "";
+  alert(`Added ${result.added} source${result.added === 1 ? "" : "s"}.${failed}`);
+  load();
+};
+
 // API key: checked with Anthropic and kept in the system's password store; only its last
 // four characters are ever shown.
 async function showKey() {
