@@ -24,7 +24,7 @@ Referee checks your writing as you type in Word or Overleaf, and updates itself 
 ## Team members
 
 - Reece Mings-Alleyne ([GitHub](https://github.com/reeceama) / [LinkedIn](https://www.linkedin.com/in/reece-mings-alleyne/))
-- sedmoh ([GitHub](https://github.com/sedmoh))
+- Mohammed Seddik ([GitHub](https://github.com/sedmoh) / [LinkedIn](https://www.linkedin.com/in/mohammed-seddik-b17bab366/))
 
 ## Contents
 
